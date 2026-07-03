@@ -1455,6 +1455,7 @@ select, input, textarea { font-family: inherit; font-size: 14px; }
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
 <script>
 /* =========================================================================
    Painel de Terminalidade — front-end + Firestore (banco compartilhado)
@@ -1732,6 +1733,20 @@ function salvarConfigFirestore() {
 /* ----------------------------------------------------------- persistência */
 async function carregarDados() {
   if (!inicializarFirebase()) return;
+
+  try {
+    await firebase.auth().signInAnonymously();
+  } catch (e) {
+    console.error("Erro ao autenticar:", e);
+    alert(
+      "Não foi possível autenticar no Firebase.\n\n" +
+      "Verifique se a Autenticação Anônima está ativada no Console " +
+      "(Build/Segurança → Authentication → Sign-in method → Anonymous).\n\n" +
+      "Detalhe técnico: " + e.message
+    );
+    return;
+  }
+
   try {
     await seedFirestoreSeNecessario();
     iniciarListenersFirestore();
@@ -3380,13 +3395,14 @@ function bindEvents() {
 /* ------------------------------------------------------------------- boot */
 /* =========================================================================
    Tela de senha
-   Aviso importante: isto protege apenas a INTERFACE (esconde a tela até a
-   senha certa ser digitada). Não é segurança de verdade — qualquer pessoa
-   que veja o código-fonte da página encontra a senha, e se o banco de dados
-   (Firestore) estiver com regras abertas, dá pra ler/escrever nos dados
-   direto pela API, sem passar por essa tela. Veja as regras de segurança
-   do Firestore sugeridas na documentação do projeto para fechar essa
-   brecha de verdade.
+   A senha "amira" esconde a interface E também é o gatilho para autenticar
+   anonimamente no Firebase (só depois da senha certa é que o app chama
+   carregarDados(), que faz o signInAnonymously()). Combinada com regras do
+   Firestore do tipo "allow read, write: if request.auth != null", isso
+   fecha a brecha de acessar o banco direto pela API sem passar pela senha.
+   Ainda assim, a senha em si continua visível para quem inspecionar o
+   código-fonte da página — não é proteção contra alguém que já conhece a
+   senha "amira", apenas contra acesso direto ao banco por quem não a tem.
    ========================================================================= */
 const SENHA_ACESSO = "amira";
 const LOCK_SESSION_KEY = "painel_terminalidade_desbloqueado";
@@ -3394,6 +3410,7 @@ const LOCK_SESSION_KEY = "painel_terminalidade_desbloqueado";
 function verificarSenhaSalva() {
   if (sessionStorage.getItem(LOCK_SESSION_KEY) === "1") {
     document.getElementById("lock-overlay").hidden = true;
+    carregarDados();
   }
 }
 
@@ -3406,6 +3423,7 @@ function bindLockScreen() {
       sessionStorage.setItem(LOCK_SESSION_KEY, "1");
       document.getElementById("lock-overlay").hidden = true;
       erro.hidden = true;
+      carregarDados();
     } else {
       erro.hidden = false;
       campo.value = "";
@@ -3418,7 +3436,9 @@ function bindLockScreen() {
   verificarSenhaSalva();
   bindLockScreen();
   bindEvents();
-  carregarDados(); // inicia o Firebase; a primeira renderização acontece quando os dados chegam dos listeners em tempo real
+  // O Firebase só é acessado depois que a senha certa é confirmada
+  // (chamado dentro de verificarSenhaSalva ou no submit da tela de senha),
+  // para que a autenticação anônima fique de fato atrelada a conhecer a senha.
 })();
 </script>
 </body>
