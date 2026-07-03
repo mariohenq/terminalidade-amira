@@ -1,0 +1,3426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Terminalidade — Gestão de Pendências</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* =========================================================================
+   Painel de Terminalidade — tokens
+   Paleta: azul-aço (identidade de prancha/planta baixa) + semáforo discreto
+   ========================================================================= */
+:root {
+  --bg: #EEF2F5;
+  --surface: #FFFFFF;
+  --border: #DDE4E9;
+  --border-strong: #C4CFD6;
+
+  --ink: #1C2830;
+  --ink-soft: #4A5A65;
+  --ink-mute: #7C8A94;
+
+  --steel: #2C5F7C;
+  --steel-dark: #1D4356;
+  --steel-tint: #E7EFF3;
+
+  --verde: #2E7D46;      --verde-bg: #E5F3E8;
+  --amarelo: #B9860F;    --amarelo-bg: #FBF1DA;
+  --laranja: #C0602A;    --laranja-bg: #FBE7D9;
+  --vermelho: #C23B3B;   --vermelho-bg: #FCE6E6;
+  --cinza: #7C8A94;      --cinza-bg: #EAEDEF;
+
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(28,40,48,.04), 0 4px 14px rgba(28,40,48,.06);
+
+  --font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Roboto Mono', 'Consolas', monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { font-family: var(--font-display); margin: 0; }
+
+button { font-family: inherit; cursor: pointer; }
+select, input, textarea { font-family: inherit; font-size: 14px; }
+
+/* ---------------------------------------------------------------- topbar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 28px;
+  background: var(--steel-dark);
+  background-image:
+    linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: #fff;
+}
+.topbar__brand { display: flex; align-items: center; gap: 14px; }
+.brand-mark { color: #BFD6E2; flex-shrink: 0; }
+.topbar h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+.topbar__subtitle {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #AFC6D3;
+  letter-spacing: .2px;
+}
+.topbar__meta { display: flex; gap: 10px; }
+.meta-chip {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #DCE9EF;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.18);
+  padding: 6px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.meta-chip--accent { background: rgba(191,214,226,.18); border-color: rgba(191,214,226,.4); }
+
+/* ------------------------------------------------------------------ tabs */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.tab-btn {
+  border: none;
+  background: transparent;
+  padding: 14px 18px 12px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: .3px;
+  color: var(--ink-mute);
+  border-bottom: 3px solid transparent;
+  transition: color .15s ease, border-color .15s ease;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--steel-dark); }
+.tab-btn.is-active { color: var(--steel-dark); border-bottom-color: var(--steel); font-weight: 600; }
+
+/* ------------------------------------------------------------------ main */
+.app-main { max-width: min(1800px, 97vw); margin: 0 auto; padding: 22px 24px 60px; }
+.tab-panel { display: none; }
+.tab-panel.is-active { display: block; animation: fadeIn .25s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* --------------------------------------------------------------- filters */
+.filterbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.filterbar__label {
+  font-family: var(--font-display);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--ink-mute);
+  margin-right: 4px;
+}
+.filterbar select, .filterbar input {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 7px;
+  padding: 7px 10px;
+  color: var(--ink);
+  min-width: 130px;
+}
+.filterbar__count { font-size: 12.5px; color: var(--ink-mute); margin-left: auto; }
+.filterbar--wrap { row-gap: 8px; }
+
+/* ------------------------------------------------------------------ btns */
+.btn {
+  border-radius: 7px;
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn--primary { background: var(--steel); color: #fff; }
+.btn--primary:hover { background: var(--steel-dark); }
+.btn--ghost { background: transparent; color: var(--ink-soft); border-color: var(--border-strong); }
+.btn--ghost:hover { background: var(--steel-tint); }
+.btn--danger { background: var(--vermelho-bg); color: var(--vermelho); border-color: #F0C3C3; }
+.btn--danger:hover { background: #F8D4D4; }
+
+/* ----------------------------------------------------------------- cards */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width: 900px) { .cards-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  border-top: 3px solid var(--steel);
+}
+.kpi-card__label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--ink-mute);
+  font-weight: 600;
+}
+.kpi-card__value {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.2;
+  margin-top: 2px;
+}
+.kpi-card--alerta { border-top-color: var(--vermelho); }
+.kpi-card--alerta .kpi-card__value { color: var(--vermelho); }
+.kpi-card--sucesso { border-top-color: var(--verde); }
+.kpi-card--sucesso .kpi-card__value { color: var(--verde); }
+.kpi-card--atencao { border-top-color: var(--amarelo); }
+
+/* ------------------------------------------------------------- dashboard */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.panel--span2 { grid-column: 1 / -1; }
+@media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px 18px;
+}
+.panel--narrow { max-width: 760px; margin: 0 auto 16px; }
+.panel__head { margin-bottom: 10px; }
+.panel__head h2 { font-size: 17px; font-weight: 600; color: var(--ink); }
+.panel__head p { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-mute); }
+
+/* ------------------------------------------------------------- gráficos (tamanho fixo) */
+.chart-box { position: relative; width: 100%; }
+.chart-box canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+.chart-box--sm { height: 220px; }
+.chart-box--md { height: 300px; }
+.chart-box--wide { height: 240px; }
+.chart-box--donut { height: 240px; max-width: 240px; margin: 4px auto 0; }
+@media (max-width: 640px) {
+  .chart-box--sm { height: 200px; }
+  .chart-box--md { height: 320px; }
+  .chart-box--wide { height: 220px; }
+  .chart-box--donut { height: 200px; max-width: 200px; }
+}
+
+/* ---------------------------------------------------------- balão de ajuda (tooltip) */
+.panel__head--info { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.info-balloon { position: relative; flex-shrink: 0; }
+.info-balloon__icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--steel-tint);
+  color: var(--steel-dark);
+  font-family: var(--font-display);
+  font-size: 13px; font-weight: 700;
+  cursor: help;
+  border: 1px solid var(--border-strong);
+}
+.info-balloon__tip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 250px;
+  background: var(--steel-dark);
+  color: #EAF1F5;
+  font-size: 11.5px;
+  line-height: 1.55;
+  padding: 12px 14px;
+  border-radius: 8px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.25);
+  z-index: 30;
+  text-align: left;
+}
+.info-balloon__tip strong { color: #BFD6E2; }
+.info-balloon:hover .info-balloon__tip,
+.info-balloon:focus .info-balloon__tip,
+.info-balloon:focus-within .info-balloon__tip { display: block; }
+
+/* ------------------------------------------------------------------ heatmap */
+.heatmap-legend {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-size: 12px; color: var(--ink-soft);
+  margin-bottom: 12px;
+}
+.heatmap-legend span { display: flex; align-items: center; gap: 6px; }
+.dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.dot--liberada { background: var(--verde); }
+.dot--poucas { background: var(--amarelo); }
+.dot--intermediario { background: var(--laranja); }
+.dot--critico { background: var(--vermelho); }
+.dot--nvistoriada { background: var(--cinza); }
+
+.heatmap { display: flex; flex-direction: column; gap: 6px; }
+.heatmap__row { display: flex; align-items: center; gap: 6px; }
+.heatmap__pav-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  width: 44px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.heatmap__units { display: flex; gap: 6px; flex: 1; }
+.hm-cell {
+  flex: 1;
+  border-radius: 6px;
+  padding: 6px 4px;
+  text-align: center;
+  color: #fff;
+  position: relative;
+  cursor: default;
+  min-width: 56px;
+}
+.hm-cell__num { font-family: var(--font-mono); font-size: 12px; font-weight: 600; display: block; }
+.hm-cell__count { font-size: 10.5px; opacity: .9; display: block; }
+.hm-cell--liberada { background: var(--verde); }
+.hm-cell--poucas { background: var(--amarelo); color: #3A2C05; }
+.hm-cell--intermediario { background: var(--laranja); }
+.hm-cell--critico { background: var(--vermelho); }
+.hm-cell--nvistoriada { background: var(--cinza); }
+
+.hm-cell .hm-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--steel-dark);
+  color: #fff;
+  font-size: 11.5px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  width: 200px;
+  text-align: left;
+  z-index: 20;
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+  line-height: 1.5;
+}
+.hm-cell .hm-tooltip strong { color: #BFD6E2; }
+.hm-cell:hover .hm-tooltip { display: block; }
+
+/* -------------------------------------------------------------- ranking */
+.ranking-lista { display: flex; flex-direction: column; gap: 8px; }
+.ranking-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #FAFBFC;
+}
+.ranking-item__pos {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--steel);
+  width: 24px;
+  text-align: center;
+}
+.ranking-item__body { flex: 1; }
+.ranking-item__unidade { font-weight: 600; font-size: 13.5px; }
+.ranking-item__detalhe { font-size: 11.5px; color: var(--ink-mute); }
+.ranking-item__score {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--vermelho-bg);
+  color: var(--vermelho);
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- toolbar */
+.toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
+
+.bulkbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--steel-tint);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+.bulkbar__count { font-size: 12.5px; font-weight: 700; color: var(--steel-dark); margin-right: 4px; }
+.bulkbar select {
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 7px 10px;
+  background: var(--surface);
+}
+
+.select-inline {
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--cinza-bg); color: var(--cinza);
+}
+.select-inline[data-status="Aberta"] { background: var(--cinza-bg); color: var(--cinza); }
+.select-inline[data-status="Direcionada"] { background: var(--steel-tint); color: var(--steel); }
+.select-inline[data-status="Em execução"] { background: var(--amarelo-bg); color: var(--amarelo); }
+.select-inline[data-status="Aguardando conferência"] { background: var(--laranja-bg); color: var(--laranja); }
+.select-inline[data-status="Reaberta"] { background: var(--vermelho-bg); color: var(--vermelho); }
+.select-inline[data-status="Encerrada"] { background: var(--verde-bg); color: var(--verde); }
+.toolbar input[type="search"] {
+  flex: 1;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 9px 12px;
+  background: var(--surface);
+}
+
+/* ------------------------------------------------------------------ table */
+.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: auto;
+  max-height: 68vh;
+}
+.tabela-pendencias { width: 100%; border-collapse: collapse; font-size: 12.4px; }
+.tabela-pendencias thead th {
+  position: sticky; top: 0;
+  background: var(--steel-tint);
+  color: var(--steel-dark);
+  text-align: left;
+  padding: 9px 8px;
+  font-family: var(--font-display);
+  letter-spacing: .3px;
+  font-size: 12px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+.tabela-pendencias td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--ink-soft);
+}
+.tabela-pendencias tbody tr:hover { background: #F7FAFC; }
+.tabela-pendencias td.desc-col { max-width: 190px; }
+.tabela-pendencias .cod { font-family: var(--font-mono); color: var(--steel-dark); font-weight: 600; }
+
+/* ---------------------------------------------------- cartões (mobile) */
+.cards-pendencias-mobile { display: none; flex-direction: column; gap: 10px; }
+.pend-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px 14px;
+  box-shadow: var(--shadow);
+}
+.pend-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.pend-card__id { display: flex; align-items: center; gap: 8px; }
+.pend-card__cod { font-family: var(--font-mono); font-weight: 700; color: var(--steel-dark); font-size: 13.5px; }
+.pend-card__meta { font-size: 12px; color: var(--ink-mute); margin-bottom: 6px; }
+.pend-card__desc { font-size: 13.5px; color: var(--ink); margin-bottom: 9px; line-height: 1.45; }
+.pend-card__fotos { margin-bottom: 9px; }
+.pend-card__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-bottom: 10px; font-size: 12.3px; }
+.pend-card__grid div b { display: block; color: var(--ink-mute); font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 2px; }
+.pend-card__status select { width: 100%; }
+.pend-card__acoes { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+.pend-card__acoes .icon-btn { flex: 1; text-align: center; padding: 8px; }
+
+@media (max-width: 767px) {
+  .table-wrap { display: none; }
+  .cards-pendencias-mobile { display: flex; }
+}
+
+/* -------------------------------------------------------- filtros tipo Excel */
+.th-inner { display: flex; align-items: center; gap: 5px; }
+.th-filter-btn {
+  border: none; background: transparent; padding: 2px;
+  color: var(--steel); opacity: .55;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+}
+.th-filter-btn svg { width: 10px; height: 10px; fill: currentColor; }
+.th-filter-btn:hover { opacity: 1; background: rgba(44,95,124,.12); }
+.th-filter-btn.is-ativo { opacity: 1; color: var(--vermelho); }
+
+.col-filter-panel {
+  position: fixed;
+  z-index: 250;
+  width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0,0,0,.22);
+  display: flex; flex-direction: column;
+  font-size: 12.5px;
+  text-transform: none;
+}
+.col-filter-panel__toolbar {
+  display: flex; justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.col-filter-panel__toolbar button {
+  border: none; background: transparent;
+  color: var(--steel); font-size: 11.5px; font-weight: 600;
+  text-decoration: underline; cursor: pointer;
+}
+.col-filter-panel__lista {
+  max-height: 220px; overflow-y: auto;
+  padding: 6px 4px;
+}
+.col-filter-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 6px;
+  cursor: pointer; color: var(--ink);
+  font-weight: 400;
+}
+.col-filter-item:hover { background: var(--steel-tint); }
+.col-filter-item input { flex-shrink: 0; }
+.col-filter-panel__acoes {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+.col-filter-panel__acoes .btn { padding: 5px 12px; font-size: 12px; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge--crit-baixa { background: var(--cinza-bg); color: var(--cinza); }
+.badge--crit-media { background: var(--amarelo-bg); color: var(--amarelo); }
+.badge--crit-alta { background: var(--vermelho-bg); color: var(--vermelho); }
+
+.badge--status-aberta { background: var(--cinza-bg); color: var(--cinza); }
+.badge--status-direcionada { background: var(--steel-tint); color: var(--steel); }
+.badge--status-em-execucao { background: var(--amarelo-bg); color: var(--amarelo); }
+.badge--status-aguardando-conferencia { background: var(--laranja-bg); color: var(--laranja); }
+.badge--status-reaberta { background: var(--vermelho-bg); color: var(--vermelho); }
+.badge--status-encerrada { background: var(--verde-bg); color: var(--verde); }
+
+.badge--alerta-normal { background: var(--verde-bg); color: var(--verde); }
+.badge--alerta-atencao { background: var(--amarelo-bg); color: var(--amarelo); }
+.badge--alerta-antiga { background: var(--vermelho-bg); color: var(--vermelho); font-weight: 700; }
+.badge--alerta-encerrada { background: var(--cinza-bg); color: var(--cinza); }
+
+.badge--pendente {
+  background: var(--laranja-bg); color: var(--laranja);
+  border: 1px dashed var(--laranja);
+  font-weight: 700;
+}
+.linha-incompleta { background: #FFFBF3; }
+.tabela-pendencias tr.linha-incompleta:hover { background: #FFF6E8; }
+.pend-card.linha-incompleta { border-color: var(--laranja); border-left-width: 3px; }
+
+.row-acoes { display: flex; gap: 6px; }
+.icon-btn {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.icon-btn:hover { background: var(--steel-tint); color: var(--steel-dark); }
+
+.input-inline {
+  width: 84px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--surface);
+}
+.input-inline:focus { outline: 2px solid var(--steel); outline-offset: 1px; }
+.input-inline--saved { border-color: var(--verde); }
+
+/* ----------------------------------------------------- adicionar unidade */
+.add-unidade-form {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  align-items: center;
+  background: #FAFBFC;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 14px;
+}
+.add-unidade-form input {
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 12.8px;
+  width: 140px;
+}
+
+/* ---------------------------------------------------------- catálogos */
+.catalogo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 900px) { .catalogo-grid { grid-template-columns: 1fr; } }
+.catalogo-bloco h3 {
+  font-size: 13px; font-family: var(--font-display); letter-spacing: .3px;
+  color: var(--steel-dark); margin-bottom: 8px;
+}
+.chip-lista {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  min-height: 32px;
+  margin-bottom: 10px;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--steel-tint);
+  color: var(--steel-dark);
+  border-radius: 20px;
+  padding: 4px 6px 4px 12px;
+  font-size: 12px;
+}
+.chip__remover {
+  border: none; background: rgba(0,0,0,.08);
+  width: 16px; height: 16px; border-radius: 50%;
+  color: var(--steel-dark); font-size: 10px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.chip__remover:hover { background: var(--vermelho); color: #fff; }
+.chip-form { display: flex; gap: 8px; }
+.chip-form input {
+  flex: 1; border: 1px solid var(--border-strong);
+  border-radius: 7px; padding: 7px 10px; font-size: 12.5px;
+}
+
+/* -------------------------------------------------------------- import */
+.import-box { display: flex; flex-direction: column; gap: 14px; }
+.import-box__campos {
+  background: var(--steel-tint);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12.8px;
+  color: var(--ink-soft);
+}
+.import-box__campos p { margin: 4px 0; }
+.import-form { display: flex; flex-direction: column; gap: 12px; }
+.import-form input[type="file"] {
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  padding: 14px;
+  background: #FAFBFC;
+}
+.import-form__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.import-resultado {
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+.import-resultado.ok { background: var(--verde-bg); color: var(--verde); }
+.import-resultado.erro { background: var(--vermelho-bg); color: var(--vermelho); }
+.import-resultado ul { margin: 6px 0 0; padding-left: 18px; }
+.text-muted { color: var(--ink-mute); font-size: 13px; }
+.text-muted code {
+  background: var(--steel-tint); padding: 1px 5px; border-radius: 4px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--steel-dark);
+}
+
+/* -------------------------------------------------------------------- modal */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(20, 30, 36, .5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.modal {
+  background: var(--surface);
+  border-radius: 12px;
+  width: min(720px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.modal__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--surface); z-index: 2;
+}
+.modal__head h2 { font-size: 19px; }
+.modal__close { border: none; background: transparent; font-size: 16px; color: var(--ink-mute); }
+.modal__close:hover { color: var(--ink); }
+
+.modal__form { padding: 18px 22px 22px; display: flex; flex-direction: column; gap: 14px; }
+
+/* ---------------------------------------------------------- fotos (upload) */
+.foto-previews { gap: 14px; }
+.foto-preview {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: #FAFBFC;
+  display: flex; flex-direction: column; gap: 6px;
+  width: 140px;
+}
+.foto-preview__label { font-size: 11px; font-weight: 700; color: var(--ink-mute); text-transform: uppercase; letter-spacing: .4px; }
+.foto-preview__img { width: 100%; height: 90px; object-fit: cover; border-radius: 6px; background: var(--steel-tint); }
+.foto-preview__remover { font-size: 11px; padding: 3px 8px; }
+
+.tabela-pendencias .fotos-col { white-space: nowrap; }
+.foto-thumb-btn {
+  width: 42px; height: 42px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background-size: cover; background-position: center;
+  cursor: zoom-in;
+  display: inline-block;
+  margin-right: 5px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.foto-thumb-btn--vazio {
+  background: var(--cinza-bg);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink-mute); font-size: 13px; cursor: default;
+}
+
+.lightbox-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10, 16, 20, .82);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 300; padding: 24px;
+}
+.lightbox {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  justify-content: center; max-width: 900px;
+}
+.lightbox figure { margin: 0; text-align: center; }
+.lightbox img { max-width: 400px; max-height: 60vh; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+.lightbox figcaption { color: #DCE9EF; font-size: 12.5px; margin-top: 8px; font-family: var(--font-display); letter-spacing: .3px; }
+.lightbox-close {
+  position: fixed; top: 20px; right: 24px;
+  background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.3);
+  border-radius: 50%; width: 36px; height: 36px; font-size: 16px; z-index: 301;
+}
+
+/* =========================================================================
+   Chat guiado — cadastro rápido de pendências
+   ========================================================================= */
+.chat-fab {
+  position: fixed; bottom: 24px; right: 24px;
+  width: 58px; height: 58px; border-radius: 50%;
+  background: var(--steel); color: #fff;
+  border: none; box-shadow: 0 10px 26px rgba(44,95,124,.4);
+  font-size: 24px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 150;
+  transition: transform .15s ease, background .15s ease;
+}
+.chat-fab:hover { background: var(--steel-dark); transform: scale(1.06); }
+.chat-fab__plus {
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+.chat-fab__badge {
+  position: absolute; top: -2px; right: -2px;
+  background: var(--vermelho); color: #fff;
+  font-size: 9.5px; font-weight: 700;
+  border-radius: 10px; padding: 2px 5px;
+  font-family: var(--font-mono);
+}
+
+.chat-panel {
+  position: fixed; bottom: 24px; right: 24px;
+  width: 380px; max-width: calc(100vw - 32px);
+  height: 560px; max-height: calc(100vh - 48px);
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.28);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  z-index: 160;
+  border: 1px solid var(--border);
+}
+.chat-panel__head {
+  background: var(--steel-dark);
+  background-image:
+    linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size: 18px 18px;
+  color: #fff;
+  padding: 14px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.chat-panel__head-title { display: flex; align-items: center; gap: 10px; }
+.chat-panel__head-title .avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(255,255,255,.14);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+}
+.chat-panel__head h3 { font-size: 15px; font-weight: 600; margin: 0; }
+.chat-panel__head p { margin: 0; font-size: 11px; color: #AFC6D3; }
+.chat-panel__close { background: transparent; border: none; color: #fff; font-size: 16px; opacity: .8; }
+.chat-panel__close:hover { opacity: 1; }
+
+.chat-panel__body {
+  flex: 1; overflow-y: auto;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: #F5F8FA;
+}
+.chat-msg { display: flex; max-width: 88%; }
+.chat-msg--bot { align-self: flex-start; }
+.chat-msg--user { align-self: flex-end; }
+.chat-msg__bubble {
+  padding: 9px 13px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.chat-msg--bot .chat-msg__bubble {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  border-bottom-left-radius: 3px;
+}
+.chat-msg--user .chat-msg__bubble {
+  background: var(--steel);
+  color: #fff;
+  border-bottom-right-radius: 3px;
+}
+.chat-msg__bubble strong { display: block; margin-bottom: 2px; }
+.chat-msg__bubble img { max-width: 100%; border-radius: 8px; margin-top: 6px; display: block; }
+
+.chat-panel__input {
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.chat-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 180px; overflow-y: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.chat-chip {
+  border: 1px solid var(--border-strong);
+  background: var(--steel-tint);
+  color: var(--steel-dark);
+  border-radius: 20px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+.chat-chip:hover { background: var(--steel); color: #fff; border-color: var(--steel); }
+.chat-chip--outro {
+  background: transparent;
+  border-style: dashed;
+  color: var(--ink-soft);
+}
+.chat-chip--outro:hover { background: var(--ink-soft); color: #fff; border-style: solid; }
+.chat-filtro {
+  width: 100%; border: 1px solid var(--border-strong); border-radius: 8px;
+  padding: 7px 10px; font-size: 12.5px; margin-bottom: 8px;
+}
+.chat-texto-row { display: flex; gap: 8px; }
+.chat-texto-row input, .chat-texto-row textarea {
+  flex: 1; border: 1px solid var(--border-strong); border-radius: 8px;
+  padding: 8px 10px; font-size: 13px; resize: none;
+}
+.chat-texto-row button {
+  background: var(--steel); color: #fff; border: none;
+  border-radius: 8px; padding: 0 16px; font-weight: 600; font-size: 13px;
+}
+.chat-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.chat-acoes .btn { flex: 1; justify-content: center; }
+.chat-voltar {
+  border: none; background: transparent; color: var(--ink-mute);
+  font-size: 11.5px; text-decoration: underline; cursor: pointer;
+  padding: 0 0 8px;
+}
+.chat-resumo { background: var(--steel-tint); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+.chat-resumo div { margin-bottom: 3px; }
+.chat-resumo b { color: var(--steel-dark); }
+.chat-foto-preview { margin-top: 6px; }
+.chat-foto-preview img { max-width: 160px; border-radius: 8px; display: block; }
+
+@media (max-width: 640px) {
+  .chat-panel {
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100%; height: 100%;
+    max-width: 100%; max-height: 100%;
+    border-radius: 0;
+  }
+  .chat-fab { bottom: 18px; right: 18px; width: 56px; height: 56px; }
+  .chat-chip { padding: 10px 15px; font-size: 13.5px; min-height: 40px; }
+  .chat-acoes .btn { padding: 11px 16px; font-size: 14px; }
+}
+.form-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.form-row label {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+  flex: 1; min-width: 160px;
+}
+.form-row--full label { min-width: 100%; }
+.form-row input, .form-row select, .form-row textarea {
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 8px 10px;
+  color: var(--ink);
+  font-weight: 400;
+  resize: vertical;
+}
+.form-row input:disabled { background: var(--bg); color: var(--ink-mute); }
+
+.modal__actions {
+  display: flex; align-items: center; justify-content: space-between;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin-top: 4px;
+}
+.modal__actions-right { display: flex; gap: 10px; }
+.form-erro { color: var(--vermelho); font-size: 12.8px; margin: 0; }
+
+/* --------------------------------------------------------------------- toast */
+.toast {
+  position: fixed;
+  bottom: 22px; left: 50%; transform: translateX(-50%);
+  background: var(--steel-dark);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 30px;
+  font-size: 13.5px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  z-index: 200;
+}
+
+/* --------------------------------------------------------------------- misc */
+[hidden] { display: none !important; }
+
+/* =========================================================================
+   Tela de senha (proteção simples de acesso à interface)
+   ========================================================================= */
+.lock-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: var(--steel-dark);
+  background-image:
+    linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.lock-box {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 36px 32px;
+  width: 100%; max-width: 340px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0,0,0,.35);
+}
+.lock-box__icon { font-size: 34px; margin-bottom: 6px; }
+.lock-box h1 { font-size: 21px; margin-bottom: 4px; }
+.lock-box p { font-size: 13px; color: var(--ink-mute); margin: 0 0 18px; }
+.lock-box input {
+  width: 100%; border: 1px solid var(--border-strong); border-radius: 8px;
+  padding: 11px 14px; font-size: 15px; text-align: center;
+  margin-bottom: 12px; letter-spacing: 1px;
+}
+.lock-box .btn { width: 100%; justify-content: center; padding: 11px; font-size: 14.5px; }
+.lock-box__erro { color: var(--vermelho); font-size: 12.5px; margin-top: 10px !important; }
+
+.app-footer {
+  text-align: center;
+  padding: 18px 24px 90px;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+@media (max-width: 640px) {
+  .topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .heatmap__units { flex-wrap: wrap; }
+  .hm-cell { min-width: 44px; }
+
+  .toolbar { flex-wrap: wrap; }
+  .toolbar input[type="search"] { min-width: 100%; order: -1; }
+  .toolbar .btn { flex: 1; justify-content: center; }
+
+  .filterbar { gap: 6px; }
+  .filterbar select, .filterbar input { min-width: 0; flex: 1 1 46%; }
+
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .col-filter-panel__lista { -webkit-overflow-scrolling: touch; }
+
+  .icon-btn { padding: 7px 11px; font-size: 13px; }
+  .row-acoes { flex-wrap: wrap; gap: 8px; }
+
+  .modal { border-radius: 12px 12px 0 0; width: 100%; max-height: 92vh; }
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal__actions { flex-wrap: wrap; gap: 10px; }
+  .modal__actions-right { width: 100%; }
+  .modal__actions-right .btn { flex: 1; justify-content: center; }
+  #btn-excluir-pendencia { width: 100%; justify-content: center; }
+
+  .kpi-card__value { font-size: 25px; }
+  .cards-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+  .bulkbar { flex-direction: column; align-items: stretch; }
+  .bulkbar select, .bulkbar .btn { width: 100%; }
+
+  .add-unidade-form { flex-direction: column; align-items: stretch; }
+  .add-unidade-form input { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="lock-overlay" id="lock-overlay">
+  <form class="lock-box" id="lock-form">
+    <div class="lock-box__icon">🔒</div>
+    <h1>Painel de Terminalidade</h1>
+    <p>Acesso restrito. Digite a senha para continuar.</p>
+    <input type="password" id="lock-senha" placeholder="Senha" autocomplete="off" autofocus>
+    <button type="submit" class="btn btn--primary">Entrar</button>
+    <p class="lock-box__erro" id="lock-erro" hidden>Senha incorreta.</p>
+  </form>
+</div>
+
+
+<header class="topbar">
+  <div class="topbar__brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 40 40" width="30" height="30">
+        <rect x="3" y="3" width="34" height="34" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M3 14 H37 M14 3 V37 M26 3 V37 M3 26 H37" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+      </svg>
+    </div>
+    <div>
+      <h1 id="topbar-titulo">Painel de Terminalidade</h1>
+      <p class="topbar__subtitle" id="topbar-subtitulo">Gestão de pendências &amp; liberação de unidades — Obra Residencial Vertical</p>
+    </div>
+  </div>
+  <div class="topbar__meta">
+    <div class="meta-chip" id="meta-data-hoje">—</div>
+    <div class="meta-chip meta-chip--accent">28 unidades · 7 pavimentos</div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab-btn is-active" data-tab="dashboard" role="tab">01 · Dashboard Geral</button>
+  <button class="tab-btn" data-tab="pendencias" role="tab">02 · Pendências</button>
+  <button class="tab-btn" data-tab="unidades" role="tab">03 · Unidades e Ranking</button>
+</nav>
+
+<main class="app-main">
+
+  <!-- ======================= ABA 1 — DASHBOARD ======================= -->
+  <section id="tab-dashboard" class="tab-panel is-active">
+
+    <div class="filterbar" id="filtros-globais">
+      <span class="filterbar__label">Filtros globais</span>
+      <select id="fg-unidade"><option value="">Unidade — todas</option></select>
+      <select id="fg-status"><option value="">Status — todos</option></select>
+      <select id="fg-criticidade"><option value="">Criticidade — todas</option></select>
+      <button class="btn btn--ghost" id="fg-limpar">Limpar</button>
+    </div>
+
+    <div class="cards-grid" id="cards-indicadores"></div>
+
+    <div class="dash-grid">
+
+      <div class="panel panel--span2">
+        <div class="panel__head">
+          <h2>Mapa de calor por unidade</h2>
+          <p>Situação individual das 28 unidades habitacionais, por pavimento.</p>
+        </div>
+        <div class="heatmap-legend">
+          <span><i class="dot dot--liberada"></i>Liberada</span>
+          <span><i class="dot dot--poucas"></i>Poucas pendências</span>
+          <span><i class="dot dot--intermediario"></i>Intermediário</span>
+          <span><i class="dot dot--critico"></i>Crítico</span>
+          <span><i class="dot dot--nvistoriada"></i>Não vistoriada</span>
+        </div>
+        <div id="heatmap" class="heatmap"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel__head panel__head--info">
+          <div>
+            <h2>Unidades prioritárias</h2>
+            <p>Ranking para ação da engenharia.</p>
+          </div>
+          <span class="info-balloon" tabindex="0">
+            <span class="info-balloon__icon">?</span>
+            <span class="info-balloon__tip">
+              <strong>Como a pontuação é calculada:</strong><br>
+              1 pt por pendência aberta · +3 pts por pendência de criticidade Alta ·
+              +2 pts por pendência antiga (&gt;7 dias) · +2 pts por pendência reaberta.
+            </span>
+          </span>
+        </div>
+        <div id="ranking-lista" class="ranking-lista"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel__head"><h2>Pendências por disciplina</h2></div>
+        <div class="chart-box chart-box--md"><canvas id="chart-disciplina"></canvas></div>
+      </div>
+
+      <div class="panel panel--span2">
+        <div class="panel__head"><h2>Top 5 unidades com mais pendências abertas</h2></div>
+        <div class="chart-box chart-box--wide"><canvas id="chart-top5"></canvas></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= ABA 2 — PENDÊNCIAS ======================= -->
+  <section id="tab-pendencias" class="tab-panel">
+
+    <div class="toolbar">
+      <input type="search" id="busca-livre" placeholder="Buscar por código, unidade, descrição, responsável…">
+      <button class="btn btn--ghost" id="ft-limpar">Limpar filtros</button>
+      <button class="btn btn--ghost" id="btn-baixar-pdf">⬇ Baixar PDF</button>
+      <button class="btn btn--primary" id="btn-nova-pendencia">+ Nova pendência</button>
+      <span class="filterbar__count" id="contagem-resultados"></span>
+    </div>
+
+    <div class="filterbar filterbar--wrap" id="filtros-tabela">
+      <select id="ft-unidade"><option value="">Unidade</option></select>
+      <select id="ft-ambiente"><option value="">Ambiente</option></select>
+      <select id="ft-disciplina"><option value="">Disciplina</option></select>
+      <select id="ft-responsavel"><option value="">Responsável</option></select>
+      <select id="ft-criticidade"><option value="">Criticidade</option></select>
+      <select id="ft-status"><option value="">Status</option></select>
+      <select id="ft-alerta"><option value="">Alerta</option></select>
+    </div>
+
+    <div class="bulkbar" id="bulkbar" hidden>
+      <span class="bulkbar__count" id="bulkbar-count">0 selecionada(s)</span>
+      <select id="bulk-status">
+        <option value="">Alterar status para…</option>
+      </select>
+      <button class="btn btn--primary" id="bulk-aplicar-status">Aplicar</button>
+      <button class="btn btn--danger" id="bulk-excluir">Excluir selecionadas</button>
+      <button class="btn btn--ghost" id="bulk-limpar-selecao">Limpar seleção</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="tabela-pendencias">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="chk-selecionar-tudo"></th>
+            <th>Código</th>
+            <th><span class="th-inner">Unidade<button type="button" class="th-filter-btn" data-campo="Unidade" title="Filtrar Unidade"><svg viewBox="0 0 16 16"><path d="M1 2h14l-5 6v5l-4 2v-7z"/></svg></button></span></th>
+            <th>Rk.</th>
+            <th><span class="th-inner">Ambiente<button type="button" class="th-filter-btn" data-campo="Ambiente" title="Filtrar Ambiente"><svg viewBox="0 0 16 16"><path d="M1 2h14l-5 6v5l-4 2v-7z"/></svg></button></span></th>
+            <th><span class="th-inner">Disciplina<button type="button" class="th-filter-btn" data-campo="Disciplina" title="Filtrar Disciplina"><svg viewBox="0 0 16 16"><path d="M1 2h14l-5 6v5l-4 2v-7z"/></svg></button></span></th>
+            <th>Descrição</th><th>Fotos</th><th>Abertura</th><th title="Dias corridos desde a data de abertura da pendência">Dias em aberto</th>
+            <th><span class="th-inner">Responsável<button type="button" class="th-filter-btn" data-campo="Responsavel" title="Filtrar Responsável"><svg viewBox="0 0 16 16"><path d="M1 2h14l-5 6v5l-4 2v-7z"/></svg></button></span></th>
+            <th><span class="th-inner">Criticidade<button type="button" class="th-filter-btn" data-campo="Criticidade" title="Filtrar Criticidade"><svg viewBox="0 0 16 16"><path d="M1 2h14l-5 6v5l-4 2v-7z"/></svg></button></span></th>
+            <th><span class="th-inner">Status<button type="button" class="th-filter-btn" data-campo="Status" title="Filtrar Status"><svg viewBox="0 0 16 16"><path d="M1 2h14l-5 6v5l-4 2v-7z"/></svg></button></span></th>
+            <th><span class="th-inner">Alerta<button type="button" class="th-filter-btn" data-campo="Alerta" title="Filtrar Alerta"><svg viewBox="0 0 16 16"><path d="M1 2h14l-5 6v5l-4 2v-7z"/></svg></button></span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-pendencias"></tbody>
+      </table>
+    </div>
+
+    <div class="cards-pendencias-mobile" id="cards-pendencias-mobile"></div>
+
+    <div class="col-filter-panel" id="col-filter-panel" hidden>
+      <div class="col-filter-panel__toolbar">
+        <button type="button" id="col-filter-marcar-tudo">Selecionar tudo</button>
+        <button type="button" id="col-filter-desmarcar-tudo">Limpar</button>
+      </div>
+      <div class="col-filter-panel__lista" id="col-filter-lista"></div>
+      <div class="col-filter-panel__acoes">
+        <button type="button" class="btn btn--ghost" id="col-filter-cancelar">Cancelar</button>
+        <button type="button" class="btn btn--primary" id="col-filter-ok">OK</button>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ======================= ABA 3 — UNIDADES E RANKING ======================= -->
+  <section id="tab-unidades" class="tab-panel">
+
+    <div class="panel panel--narrow">
+      <div class="panel__head">
+        <h2>Configurações da obra</h2>
+        <p>Personalize o nome do empreendimento — pensado para reaproveitar este mesmo painel em outras obras, sem precisar editar código.</p>
+      </div>
+      <div class="form-row">
+        <label>Nome da obra
+          <input type="text" id="cfg-nome-obra" placeholder="Ex.: Residencial Vista Alta">
+        </label>
+      </div>
+      <div class="form-row">
+        <label>Subtítulo / descrição
+          <input type="text" id="cfg-subtitulo" placeholder="Ex.: Gestão de pendências — Torre Única, 30 unidades">
+        </label>
+      </div>
+      <div class="import-form__actions">
+        <button type="button" class="btn btn--primary" id="btn-salvar-config">Salvar configurações</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel__head">
+        <h2>Ranking de prioridade por unidade</h2>
+        <p>
+          Defina manualmente o <strong>Ranking</strong> de cada unidade (ordem/identificação, ex.: ordem
+          de entrega contratual, posição comercial). O valor é salvo automaticamente e passa a valer
+          para novas pendências a partir de agora.
+        </p>
+      </div>
+
+      <div class="import-box__campos">
+        <p><strong>Ranking:</strong> campo livre, usado como identificação/prioridade da unidade (ex.: ordem de entrega, posição comercial). Não precisa ser sequencial — você decide o critério.</p>
+        <p class="text-muted">Alterar o ranking de uma unidade não altera pendências já cadastradas (o valor fica registrado no momento do cadastro) — mas passa a valer para pendências novas a partir de agora.</p>
+      </div>
+
+      <div class="add-unidade-form">
+        <input type="text" id="nova-unidade-codigo" placeholder="Código (ex.: 901)">
+        <input type="text" id="nova-unidade-pavimento" placeholder="Pavimento (ex.: 9)">
+        <input type="text" id="nova-unidade-ranking" placeholder="Ranking (opcional)">
+        <button class="btn btn--primary" id="btn-add-unidade">+ Adicionar unidade</button>
+      </div>
+
+      <div class="toolbar" style="margin-top:14px;">
+        <input type="search" id="busca-unidades" placeholder="Buscar unidade…">
+        <button class="btn btn--ghost" id="btn-restaurar-ranking">Restaurar ranking padrão</button>
+      </div>
+
+      <div class="table-wrap" style="max-height:60vh;">
+        <table class="tabela-pendencias">
+          <thead>
+            <tr>
+              <th>Unidade</th><th>Pavimento</th><th>Ranking</th>
+              <th>Status atual</th><th>Pendências abertas</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-unidades"></tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <div class="panel">
+      <div class="panel__head">
+        <h2>Catálogos (ambientes, disciplinas, responsáveis)</h2>
+        <p>Adicione ou remova itens usados nos filtros e no formulário de cadastro de pendências — útil para adaptar o painel a outros tipos de empreendimento.</p>
+      </div>
+      <div class="catalogo-grid">
+        <div class="catalogo-bloco">
+          <h3>Ambientes</h3>
+          <div class="chip-lista" id="chips-ambientes"></div>
+          <div class="chip-form">
+            <input type="text" id="novo-ambiente" placeholder="Novo ambiente…">
+            <button class="btn btn--ghost" id="btn-add-ambiente">Adicionar</button>
+          </div>
+        </div>
+        <div class="catalogo-bloco">
+          <h3>Disciplinas</h3>
+          <div class="chip-lista" id="chips-disciplinas"></div>
+          <div class="chip-form">
+            <input type="text" id="novo-disciplina" placeholder="Nova disciplina…">
+            <button class="btn btn--ghost" id="btn-add-disciplina">Adicionar</button>
+          </div>
+        </div>
+        <div class="catalogo-bloco">
+          <h3>Responsáveis / equipes</h3>
+          <div class="chip-lista" id="chips-responsaveis"></div>
+          <div class="chip-form">
+            <input type="text" id="novo-responsavel" placeholder="Nova equipe/fornecedor…">
+            <button class="btn btn--ghost" id="btn-add-responsavel">Adicionar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel panel--narrow">
+      <div class="panel__head"><h2>Dados e backup</h2></div>
+      <p class="text-muted">
+        Este protótipo roda inteiramente no navegador: todos os dados (cadastros, edições, catálogos e
+        o nome da obra) ficam salvos localmente no <code>localStorage</code> do próprio navegador —
+        nada é enviado a um servidor. Isso significa que os dados persistem se você recarregar a
+        página, mas ficam restritos a este navegador e a este computador. Use o backup para levar os
+        dados para outro navegador/computador ou para guardar um ponto de restauração.
+      </p>
+      <div class="import-form__actions">
+        <button type="button" class="btn btn--primary" id="btn-baixar-backup">⬇ Baixar backup (.json)</button>
+        <label class="btn btn--ghost" for="input-restaurar-backup" style="cursor:pointer;">⬆ Restaurar backup (.json)</label>
+        <input type="file" id="input-restaurar-backup" accept=".json" hidden>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="app-footer">
+  Desenvolvido por Mário Henrique
+</footer>
+
+<!-- ======================= MODAL — CADASTRO / EDIÇÃO ======================= -->
+<div class="modal-overlay" id="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal__head">
+      <h2 id="modal-titulo">Nova pendência</h2>
+      <button class="modal__close" id="modal-fechar" aria-label="Fechar">✕</button>
+    </div>
+
+    <form id="form-pendencia" class="modal__form">
+      <input type="hidden" id="f-codigo">
+
+      <div class="form-row">
+        <label>Código
+          <input type="text" id="f-codigo-display" disabled placeholder="Gerado automaticamente">
+        </label>
+        <label>Unidade *
+          <select id="f-unidade" required></select>
+        </label>
+        <label>Ranking da unidade
+          <input type="text" id="f-ranking" disabled>
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label>Ambiente *
+          <select id="f-ambiente" required></select>
+        </label>
+        <label>Disciplina *
+          <select id="f-disciplina" required></select>
+        </label>
+      </div>
+
+      <div class="form-row form-row--full">
+        <label>Descrição da pendência *
+          <textarea id="f-descricao" rows="2" required placeholder="Ex.: Retoque de pintura próximo ao rodapé"></textarea>
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label>Data de abertura *
+          <input type="date" id="f-data-abertura" required>
+        </label>
+        <label>Data de conferência
+          <input type="date" id="f-data-conferencia">
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label>Responsável *
+          <select id="f-responsavel" required>
+            <option value="">— Selecionar —</option>
+          </select>
+        </label>
+        <label>Criticidade *
+          <select id="f-criticidade" required>
+            <option value="">— Selecionar —</option>
+            <option value="Baixa">Baixa</option>
+            <option value="Média">Média</option>
+            <option value="Alta">Alta</option>
+          </select>
+        </label>
+        <label>Status *
+          <select id="f-status" required></select>
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label>Foto "antes"
+          <input type="file" id="f-foto-antes-arquivo" accept="image/*">
+        </label>
+        <label>Foto "depois"
+          <input type="file" id="f-foto-depois-arquivo" accept="image/*">
+        </label>
+      </div>
+      <div class="form-row foto-previews">
+        <div class="foto-preview" id="preview-antes-wrap" hidden>
+          <span class="foto-preview__label">Antes</span>
+          <img id="preview-antes" class="foto-preview__img" alt="Prévia da foto antes">
+          <button type="button" class="icon-btn foto-preview__remover" data-remover-foto="antes">Remover</button>
+        </div>
+        <div class="foto-preview" id="preview-depois-wrap" hidden>
+          <span class="foto-preview__label">Depois</span>
+          <img id="preview-depois" class="foto-preview__img" alt="Prévia da foto depois">
+          <button type="button" class="icon-btn foto-preview__remover" data-remover-foto="depois">Remover</button>
+        </div>
+      </div>
+      <input type="hidden" id="f-foto-antes">
+      <input type="hidden" id="f-foto-depois">
+
+      <div class="form-row form-row--full">
+        <label>Observações
+          <textarea id="f-observacoes" rows="2"></textarea>
+        </label>
+      </div>
+
+      <div class="modal__actions">
+        <button type="button" class="btn btn--danger" id="btn-excluir-pendencia" hidden>Excluir pendência</button>
+        <div class="modal__actions-right">
+          <button type="button" class="btn btn--ghost" id="btn-cancelar">Cancelar</button>
+          <button type="submit" class="btn btn--primary">Salvar pendência</button>
+        </div>
+      </div>
+      <p class="form-erro" id="form-erro" hidden></p>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<!-- ======================= CHAT GUIADO — CADASTRO RÁPIDO ======================= -->
+<button class="chat-fab" id="chat-fab" title="Registrar pendência pelo chat">
+  <span class="chat-fab__plus">+</span>
+</button>
+
+<div class="chat-panel" id="chat-panel" hidden>
+  <div class="chat-panel__head">
+    <div class="chat-panel__head-title">
+      <div class="avatar">🛠️</div>
+      <div>
+        <h3>Registrar pendência</h3>
+        <p>Assistente guiado — sem digitação longa</p>
+      </div>
+    </div>
+    <button class="chat-panel__close" id="chat-fechar" aria-label="Fechar">✕</button>
+  </div>
+  <div class="chat-panel__body" id="chat-corpo"></div>
+  <div class="chat-panel__input" id="chat-input-area"></div>
+</div>
+
+<div class="lightbox-overlay" id="lightbox-overlay" hidden>
+  <button class="lightbox-close" id="lightbox-fechar" aria-label="Fechar">✕</button>
+  <div class="lightbox" id="lightbox-conteudo"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
+<script>
+/* =========================================================================
+   Painel de Terminalidade — front-end + Firestore (banco compartilhado)
+   Dados simulados usados apenas para popular o banco na primeira execução.
+   ========================================================================= */
+
+const AMBIENTES = [
+  "Lavanderia", "Depósito", "BWC Serviço", "Área Técnica", "Cozinha",
+  "Gourmet", "Sala de Estar", "Quarto 2", "BWC 2", "Quarto 3", "BWC 3",
+  "Suíte Master", "BWC Suíte Master",
+];
+const DISCIPLINAS = [
+  "Pintura", "Drywall/Forro", "Esquadrias", "Portas", "Revestimentos",
+  "Rejunte", "Elétrica", "Hidráulica", "Louças e Metais",
+  "Mármore/Granito", "Limpeza", "Acabamento Geral", "Outros",
+];
+const DESCRICOES_POR_DISCIPLINA = {
+  "Pintura": ["Retoque de pintura próximo ao rodapé", "Corrigir falha de pintura em parede", "Remover respingo de tinta"],
+  "Drywall/Forro": ["Corrigir arremate de forro", "Ajustar emenda de placa de drywall"],
+  "Esquadrias": ["Regular folha de esquadria integrada", "Conferir nivelamento de folha"],
+  "Portas": ["Ajustar porta de madeira", "Regular fechamento de porta"],
+  "Revestimentos": ["Limpeza fina de revestimento", "Corrigir arremate de rodapé"],
+  "Rejunte": ["Revisar rejunte junto ao box", "Refazer rejunte manchado"],
+  "Elétrica": ["Revisar acabamento de tomada", "Revisar ponto elétrico"],
+  "Hidráulica": ["Conferir vedação de registro", "Revisar sifão com vazamento leve"],
+  "Louças e Metais": ["Revisar louça ou metal sanitário", "Conferir fixação de metal de bancada"],
+  "Mármore/Granito": ["Corrigir acabamento de mármore", "Conferir silicone em bancada"],
+  "Limpeza": ["Limpeza final pós-obra pendente", "Remover resíduo de argamassa em piso"],
+  "Acabamento Geral": ["Revisar acabamento geral do ambiente", "Conferir arremate entre materiais"],
+  "Outros": ["Item diverso a ser verificado pela engenharia"],
+};
+const RESPONSAVEIS = [
+  "Equipe Pintura", "Equipe Drywall", "Equipe Esquadrias", "Equipe Marcenaria",
+  "Equipe Revestimentos", "Equipe Elétrica", "Equipe Hidráulica",
+  "Equipe Acabamento", "Fornecedor Louças", "Fornecedor Mármore", "Equipe Limpeza",
+];
+const STATUS_LIST = ["Aberta", "Direcionada", "Em execução", "Aguardando conferência", "Reaberta", "Encerrada"];
+const CRITICIDADES = ["Baixa", "Média", "Alta"];
+const ALERTAS = ["Dentro do fluxo normal", "Atenção", "Pendência antiga", "Encerrada"];
+
+const CORES = {
+  verde: "#2E7D46", amarelo: "#B9860F", laranja: "#C0602A",
+  vermelho: "#C23B3B", cinza: "#7C8A94", steel: "#2C5F7C", steelLight: "#7FA6BC",
+};
+
+
+const state = {
+  pendencias: [], unidades: [], charts: {}, editandoCodigo: null, selecionadas: new Set(),
+  filtrosColuna: {}, config: null, ambientes: [], disciplinas: [], responsaveis: [],
+};
+
+/* ------------------------------------------------------- RNG determinístico */
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let rng = mulberry32(42);
+const randInt = (min, max) => Math.floor(rng() * (max - min + 1)) + min;
+const choice = (arr) => arr[Math.floor(rng() * arr.length)];
+function weightedChoice(arr, weights) {
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = rng() * total;
+  for (let i = 0; i < arr.length; i++) { r -= weights[i]; if (r <= 0) return arr[i]; }
+  return arr[arr.length - 1];
+}
+function toISO(date) { return date.toISOString().slice(0, 10); }
+function addDays(date, days) { const d = new Date(date); d.setDate(d.getDate() + days); return d; }
+
+/* --------------------------------------------------------- geração de dados */
+function gerarUnidades() {
+  const pavimentos = [2, 3, 4, 5, 6, 7, 8];
+  const posicoes = ["01", "02", "03", "04"];
+  const unidades = [];
+  let ranking = 1;
+  pavimentos.forEach((pav) => {
+    posicoes.forEach((pos) => {
+      unidades.push({
+        unidade: `${pav}${pos}`,
+        pavimento: pav,
+        posicao: pos,
+        ranking: ranking,
+      });
+      ranking += 1;
+    });
+  });
+  return unidades;
+}
+
+function gerarDataAbertura(hoje) {
+  const diasAtras = weightedChoice(
+    [randInt(0, 3), randInt(4, 7), randInt(8, 20), randInt(21, 35)],
+    [3, 3, 3, 1]
+  );
+  return addDays(hoje, -diasAtras);
+}
+
+function gerarPendencias(unidades, qtd) {
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const linhas = [];
+  for (let i = 1; i <= qtd; i++) {
+    const codigo = `P-${String(i).padStart(3, "0")}`;
+    const unidade = choice(unidades);
+    const disciplina = choice(DISCIPLINAS);
+    const descricao = choice(DESCRICOES_POR_DISCIPLINA[disciplina]);
+    const ambiente = choice(AMBIENTES);
+    const dataAbertura = gerarDataAbertura(hoje);
+    const responsavel = choice(RESPONSAVEIS);
+    const criticidade = weightedChoice(CRITICIDADES, [0.45, 0.35, 0.20]);
+    const status = weightedChoice(STATUS_LIST, [0.22, 0.16, 0.20, 0.14, 0.08, 0.20]);
+
+    let dataConferencia = "";
+    if (status === "Encerrada") {
+      dataConferencia = toISO(addDays(dataAbertura, randInt(1, 10)));
+    }
+
+    let observacoes = "";
+    if (status === "Reaberta") observacoes = "Item reaberto após conferência - não atendeu ao padrão de qualidade.";
+    else if (criticidade === "Alta") observacoes = "Impacta liberação da unidade - priorizar.";
+
+    linhas.push({
+      Codigo: codigo, Unidade: unidade.unidade, Ranking: unidade.ranking,
+      Ambiente: ambiente, Disciplina: disciplina, Descricao: descricao,
+      Data_Abertura: toISO(dataAbertura), Responsavel: responsavel,
+      Criticidade: criticidade, Status: status, Data_Conferencia: dataConferencia,
+      Foto_Antes: "", Foto_Depois: "", Observacoes: observacoes,
+    });
+  }
+  return linhas;
+}
+
+function gerarDadosOriginais() {
+  rng = mulberry32(42);
+  const unidades = gerarUnidades();
+  const pendencias = gerarPendencias(unidades, 52);
+  return { unidades, pendencias };
+}
+
+const CONFIG_PADRAO = {
+  nomeObra: "Painel de Terminalidade",
+  subtitulo: "Gestão de pendências & liberação de unidades — Obra Residencial Vertical",
+};
+
+/* =========================================================================
+   Firebase / Firestore — camada de dados compartilhada
+   ========================================================================= */
+
+// TODO: cole aqui a configuração do SEU projeto Firebase
+// (Console do Firebase → Configurações do projeto → Seus apps → SDK setup and configuration)
+const FIREBASE_CONFIG = {
+  apiKey: "COLE_AQUI_SUA_API_KEY",
+  authDomain: "SEU-PROJETO.firebaseapp.com",
+  projectId: "SEU-PROJETO",
+  storageBucket: "SEU-PROJETO.appspot.com",
+  messagingSenderId: "000000000000",
+  appId: "1:000000000000:web:xxxxxxxxxxxxxxxxxxxxxxxx",
+};
+
+let db = null;
+const firestorePronto = { pendencias: false, unidades: false, geral: false };
+let ultimoCodigoGerado = 0;
+
+function todasColecoesProntas() {
+  return firestorePronto.pendencias && firestorePronto.unidades && firestorePronto.geral;
+}
+
+function erroFirestore(erro) {
+  console.error("Erro no Firestore:", erro);
+  toast("Erro de conexão com o banco de dados. Veja o console (F12) para detalhes.");
+}
+
+function mostrarAvisoFirebaseNaoConfigurado() {
+  const aviso = document.createElement("div");
+  aviso.style.cssText = "position:fixed;inset:0;z-index:600;background:#1D4356;color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:Arial,sans-serif;";
+  aviso.innerHTML = `<div style="max-width:480px;">
+    <h2 style="margin-bottom:10px;">Firebase não configurado</h2>
+    <p style="font-size:14px;line-height:1.6;">
+      Este painel usa o Firestore como banco de dados compartilhado, mas as credenciais do projeto
+      ainda não foram preenchidas. Abra o código-fonte, localize a constante
+      <code style="background:rgba(255,255,255,.15);padding:1px 6px;border-radius:4px;">FIREBASE_CONFIG</code>
+      perto do início do arquivo, cole os dados do seu projeto Firebase e recarregue a página.
+    </p>
+  </div>`;
+  document.body.appendChild(aviso);
+}
+
+function inicializarFirebase() {
+  if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.indexOf("COLE_AQUI") === 0) {
+    mostrarAvisoFirebaseNaoConfigurado();
+    return false;
+  }
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.firestore();
+    return true;
+  } catch (e) {
+    console.error("Erro ao iniciar Firebase:", e);
+    mostrarAvisoFirebaseNaoConfigurado();
+    return false;
+  }
+}
+
+async function seedFirestoreSeNecessario() {
+  const [snapPend, docUnidades, docGeral] = await Promise.all([
+    db.collection("pendencias").limit(1).get(),
+    db.collection("config").doc("unidades").get(),
+    db.collection("config").doc("geral").get(),
+  ]);
+
+  if (!snapPend.empty && docUnidades.exists && docGeral.exists) return;
+
+  const gerados = gerarDadosOriginais();
+  const batch = db.batch();
+  if (snapPend.empty) {
+    gerados.pendencias.forEach((p) => batch.set(db.collection("pendencias").doc(p.Codigo), p));
+  }
+  if (!docUnidades.exists) {
+    batch.set(db.collection("config").doc("unidades"), { lista: gerados.unidades });
+  }
+  if (!docGeral.exists) {
+    batch.set(db.collection("config").doc("geral"), {
+      nomeObra: CONFIG_PADRAO.nomeObra, subtitulo: CONFIG_PADRAO.subtitulo,
+      ambientes: AMBIENTES, disciplinas: DISCIPLINAS, responsaveis: RESPONSAVEIS,
+    });
+  }
+  await batch.commit();
+}
+
+function iniciarListenersFirestore() {
+  db.collection("pendencias").onSnapshot((snapshot) => {
+    state.pendencias = snapshot.docs.map((d) => d.data());
+    firestorePronto.pendencias = true;
+    recalcularAlertas();
+    if (todasColecoesProntas()) renderTudo();
+  }, erroFirestore);
+
+  db.collection("config").doc("unidades").onSnapshot((docSnap) => {
+    state.unidades = (docSnap.exists && docSnap.data().lista) || [];
+    firestorePronto.unidades = true;
+    if (todasColecoesProntas()) { popularSelectsEstaticos(); renderTabelaUnidades(); renderTudo(); }
+  }, erroFirestore);
+
+  db.collection("config").doc("geral").onSnapshot((docSnap) => {
+    const d = docSnap.exists ? docSnap.data() : {};
+    state.config = { nomeObra: d.nomeObra || CONFIG_PADRAO.nomeObra, subtitulo: d.subtitulo || CONFIG_PADRAO.subtitulo };
+    state.ambientes = (d.ambientes && d.ambientes.length) ? d.ambientes : [...AMBIENTES];
+    state.disciplinas = (d.disciplinas && d.disciplinas.length) ? d.disciplinas : [...DISCIPLINAS];
+    state.responsaveis = (d.responsaveis && d.responsaveis.length) ? d.responsaveis : [...RESPONSAVEIS];
+    firestorePronto.geral = true;
+    aplicarConfigObra();
+    if (todasColecoesProntas()) {
+      popularSelectsEstaticos();
+      renderConfigObraForm();
+      renderChips("ambientes", "chips-ambientes");
+      renderChips("disciplinas", "chips-disciplinas");
+      renderChips("responsaveis", "chips-responsaveis");
+      renderTudo();
+    }
+  }, erroFirestore);
+}
+
+function salvarUnidadesFirestore() {
+  return db.collection("config").doc("unidades").set({ lista: state.unidades });
+}
+
+function salvarConfigFirestore() {
+  return db.collection("config").doc("geral").set({
+    nomeObra: state.config.nomeObra, subtitulo: state.config.subtitulo,
+    ambientes: state.ambientes, disciplinas: state.disciplinas, responsaveis: state.responsaveis,
+  });
+}
+
+/* ----------------------------------------------------------- persistência */
+async function carregarDados() {
+  if (!inicializarFirebase()) return;
+  try {
+    await seedFirestoreSeNecessario();
+    iniciarListenersFirestore();
+  } catch (e) {
+    erroFirestore(e);
+  }
+}
+
+function aplicarConfigObra() {
+  const titulo = document.getElementById("topbar-titulo");
+  const subtitulo = document.getElementById("topbar-subtitulo");
+  if (titulo) titulo.textContent = state.config.nomeObra;
+  if (subtitulo) subtitulo.textContent = state.config.subtitulo;
+  document.title = `${state.config.nomeObra} — Gestão de Pendências`;
+}
+
+async function restaurarDadosOriginais() {
+  if (!confirm("Isso vai substituir todos os cadastros, edições, catálogos e o nome da obra pelos dados simulados originais, PARA TODOS OS USUÁRIOS conectados a este painel. Deseja continuar?")) return;
+  try {
+    const snap = await db.collection("pendencias").get();
+    const batchDelete = db.batch();
+    snap.docs.forEach((d) => batchDelete.delete(d.ref));
+    await batchDelete.commit();
+
+    const gerados = gerarDadosOriginais();
+    const batchSeed = db.batch();
+    gerados.pendencias.forEach((p) => batchSeed.set(db.collection("pendencias").doc(p.Codigo), p));
+    batchSeed.set(db.collection("config").doc("unidades"), { lista: gerados.unidades });
+    batchSeed.set(db.collection("config").doc("geral"), {
+      nomeObra: CONFIG_PADRAO.nomeObra, subtitulo: CONFIG_PADRAO.subtitulo,
+      ambientes: AMBIENTES, disciplinas: DISCIPLINAS, responsaveis: RESPONSAVEIS,
+    });
+    await batchSeed.commit();
+
+    state.filtrosColuna = {};
+    toast("Dados simulados originais restaurados.");
+  } catch (e) {
+    erroFirestore(e);
+  }
+}
+
+/* ------------------------------------------------------------------ util */
+const slug = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.hidden = true; }, 3200);
+}
+
+function fillSelect(select, opcoes, comTodos, labelTodos) {
+  select.innerHTML = "";
+  if (comTodos) {
+    const opt = document.createElement("option");
+    opt.value = ""; opt.textContent = labelTodos;
+    select.appendChild(opt);
+  }
+  opcoes.forEach((o) => {
+    const opt = document.createElement("option");
+    opt.value = typeof o === "object" ? o.value : o;
+    opt.textContent = typeof o === "object" ? o.label : o;
+    select.appendChild(opt);
+  });
+}
+
+function popularSelectsEstaticos() {
+  fillSelect(document.getElementById("fg-status"), STATUS_LIST, true, "Status — todos");
+  fillSelect(document.getElementById("fg-criticidade"), CRITICIDADES, true, "Criticidade — todas");
+  fillSelect(document.getElementById("bulk-status"), STATUS_LIST, true, "Alterar status para…");
+
+  fillSelect(document.getElementById("f-ambiente"), state.ambientes, false);
+  fillSelect(document.getElementById("f-disciplina"), state.disciplinas, false);
+  fillSelect(document.getElementById("f-responsavel"), state.responsaveis, true, "— Selecionar —");
+  fillSelect(document.getElementById("f-status"), STATUS_LIST, false);
+
+  const unidadesOpts = state.unidades.map((u) => ({ value: u.unidade, label: `${u.unidade}` }));
+  fillSelect(document.getElementById("fg-unidade"), unidadesOpts, true, "Unidade — todas");
+  fillSelect(document.getElementById("f-unidade"), unidadesOpts, false);
+
+  // Barra de filtros por dropdown da aba Pendências (usa o mesmo estado dos funis)
+  fillSelect(document.getElementById("ft-unidade"), unidadesOpts, true, "Unidade");
+  fillSelect(document.getElementById("ft-ambiente"), state.ambientes, true, "Ambiente");
+  fillSelect(document.getElementById("ft-disciplina"), state.disciplinas, true, "Disciplina");
+  fillSelect(document.getElementById("ft-responsavel"), state.responsaveis, true, "Responsável");
+  fillSelect(document.getElementById("ft-criticidade"), CRITICIDADES, true, "Criticidade");
+  fillSelect(document.getElementById("ft-status"), STATUS_LIST, true, "Status");
+  fillSelect(document.getElementById("ft-alerta"), ALERTAS, true, "Alerta");
+}
+
+/* -------------------------------------------------------------- unidades */
+function unidadeInfo(codigo) {
+  return state.unidades.find((u) => u.unidade === codigo) || { ranking: "" };
+}
+function pendenciasDaUnidade(codigo, lista) { return (lista || state.pendencias).filter((p) => p.Unidade === codigo); }
+
+function statusDaUnidade(codigo, lista) {
+  const pend = pendenciasDaUnidade(codigo, lista);
+  if (pend.length === 0) return "Não vistoriada";
+  const abertas = pend.filter((p) => p.Status !== "Encerrada");
+  if (abertas.length === 0) return "Liberada";
+  const emAndamento = abertas.some((p) => ["Aberta", "Direcionada", "Em execução", "Reaberta"].includes(p.Status));
+  if (emAndamento) return abertas.some((p) => p.Status === "Aberta") ? "Com pendências abertas" : "Em correção";
+  return "Aguardando conferência";
+}
+
+function unidadeECritica(codigo, lista) {
+  const pend = pendenciasDaUnidade(codigo, lista).filter((p) => p.Status !== "Encerrada");
+  const alta = pend.some((p) => p.Criticidade === "Alta");
+  const antigas = pend.filter((p) => p.Alerta === "Pendência antiga").length;
+  const reaberta = pend.some((p) => p.Status === "Reaberta");
+  return alta || antigas > 1 || reaberta;
+}
+
+function pontuacaoUnidade(codigo, lista) {
+  const pend = pendenciasDaUnidade(codigo, lista).filter((p) => p.Status !== "Encerrada");
+  const abertas = pend.length;
+  const criticas = pend.filter((p) => p.Criticidade === "Alta").length;
+  const antigas = pend.filter((p) => p.Alerta === "Pendência antiga").length;
+  const reabertas = pend.filter((p) => p.Status === "Reaberta").length;
+  return { pontuacao: abertas + criticas * 3 + antigas * 2 + reabertas * 2, abertas, criticas, antigas, reabertas };
+}
+
+/* ---------------------------------------------------- cálculo dias/alerta */
+function calcularDiasAlerta(dataAberturaISO, status) {
+  let dias = null;
+  if (dataAberturaISO) {
+    const abertura = new Date(dataAberturaISO + "T00:00:00");
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    dias = Math.round((hoje - abertura) / 86400000);
+  }
+  let alerta;
+  if (status === "Encerrada") alerta = "Encerrada";
+  else if (dias === null) alerta = "Indefinido";
+  else if (dias <= 3) alerta = "Dentro do fluxo normal";
+  else if (dias <= 7) alerta = "Atenção";
+  else alerta = "Pendência antiga";
+  return { dias, alerta };
+}
+
+function recalcularAlertas() {
+  state.pendencias.forEach((p) => {
+    const { dias, alerta } = calcularDiasAlerta(p.Data_Abertura, p.Status);
+    p.Dias_Aberto = dias; p.Alerta = alerta;
+  });
+}
+
+/* -------------------------------------------------------------- filtros */
+function aplicarFiltrosGlobais(lista) {
+  const unidade = document.getElementById("fg-unidade").value;
+  const status = document.getElementById("fg-status").value;
+  const crit = document.getElementById("fg-criticidade").value;
+  return lista.filter((p) => (!unidade || p.Unidade === unidade) && (!status || p.Status === status) && (!crit || p.Criticidade === crit));
+}
+
+function aplicarFiltrosTabela(lista) {
+  const busca = document.getElementById("busca-livre").value.trim().toLowerCase();
+
+  return lista.filter((p) => {
+    for (const campo in state.filtrosColuna) {
+      const selecionados = state.filtrosColuna[campo];
+      if (selecionados && !selecionados.has(p[campo])) return false;
+    }
+    if (busca) {
+      const alvo = `${p.Codigo} ${p.Unidade} ${p.Descricao} ${p.Responsavel} ${p.Ambiente} ${p.Disciplina}`.toLowerCase();
+      if (!alvo.includes(busca)) return false;
+    }
+    return true;
+  });
+}
+
+/* --------------------------------------------------- filtros tipo Excel (funil) */
+let filtroColunaAtual = null;
+let filtroColunaSelecaoTemp = new Set();
+
+function valoresUnicosPara(campo) {
+  if (campo === "Status") return STATUS_LIST;
+  if (campo === "Criticidade") return CRITICIDADES;
+  if (campo === "Alerta") return ALERTAS;
+  const vistos = new Set();
+  state.pendencias.forEach((p) => { if (p[campo]) vistos.add(p[campo]); });
+  return [...vistos].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function abrirFiltroColuna(campo, btnEl) {
+  filtroColunaAtual = campo;
+  const valores = valoresUnicosPara(campo);
+  const atual = state.filtrosColuna[campo];
+  filtroColunaSelecaoTemp = new Set(atual ? [...atual] : valores);
+
+  renderListaFiltroColuna(valores);
+
+  const painel = document.getElementById("col-filter-panel");
+  painel.hidden = false;
+  const rect = btnEl.getBoundingClientRect();
+  const larguraPainel = 220;
+  let left = rect.left + window.scrollX - 100;
+  left = Math.max(8, Math.min(left, window.innerWidth - larguraPainel - 8));
+  painel.style.top = `${rect.bottom + window.scrollY + 6}px`;
+  painel.style.left = `${left}px`;
+}
+
+function renderListaFiltroColuna(valores) {
+  const lista = document.getElementById("col-filter-lista");
+  lista.innerHTML = valores.map((v) => `
+    <label class="col-filter-item">
+      <input type="checkbox" value="${v}" ${filtroColunaSelecaoTemp.has(v) ? "checked" : ""}>
+      <span>${v}</span>
+    </label>`).join("") || `<p class="text-muted" style="padding:8px;">Nenhum valor encontrado.</p>`;
+
+  lista.querySelectorAll("input[type=checkbox]").forEach((chk) => {
+    chk.addEventListener("change", () => {
+      if (chk.checked) filtroColunaSelecaoTemp.add(chk.value);
+      else filtroColunaSelecaoTemp.delete(chk.value);
+    });
+  });
+}
+
+function fecharFiltroColuna() {
+  document.getElementById("col-filter-panel").hidden = true;
+  filtroColunaAtual = null;
+}
+
+function aplicarFiltroColuna() {
+  if (!filtroColunaAtual) return;
+  const valoresTotais = valoresUnicosPara(filtroColunaAtual);
+  if (filtroColunaSelecaoTemp.size >= valoresTotais.length || filtroColunaSelecaoTemp.size === 0) {
+    delete state.filtrosColuna[filtroColunaAtual];
+  } else {
+    state.filtrosColuna[filtroColunaAtual] = new Set(filtroColunaSelecaoTemp);
+  }
+  fecharFiltroColuna();
+  atualizarIconesFiltroColuna();
+  renderTudo();
+}
+
+// Mapa entre o campo da pendência e o id do select correspondente na barra de filtros
+const SELECT_FILTRO_POR_CAMPO = {
+  Unidade: "ft-unidade", Ambiente: "ft-ambiente", Disciplina: "ft-disciplina",
+  Responsavel: "ft-responsavel", Criticidade: "ft-criticidade", Status: "ft-status", Alerta: "ft-alerta",
+};
+
+function atualizarIconesFiltroColuna() {
+  document.querySelectorAll(".th-filter-btn").forEach((btn) => {
+    btn.classList.toggle("is-ativo", !!state.filtrosColuna[btn.dataset.campo]);
+  });
+  // Mantém a barra de dropdowns sincronizada com o que foi definido pelo funil:
+  // mostra o valor se for um filtro de valor único, ou volta para "todos" se
+  // vários valores estiverem selecionados (o dropdown não representa multi-seleção).
+  Object.entries(SELECT_FILTRO_POR_CAMPO).forEach(([campo, selectId]) => {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    const selecionados = state.filtrosColuna[campo];
+    select.value = (selecionados && selecionados.size === 1) ? [...selecionados][0] : "";
+  });
+}
+
+function aplicarFiltroDropdown(campo, valor) {
+  if (!valor) delete state.filtrosColuna[campo];
+  else state.filtrosColuna[campo] = new Set([valor]);
+  atualizarIconesFiltroColuna();
+  renderTudo();
+}
+
+function limparTodosFiltros() {
+  state.filtrosColuna = {};
+  document.getElementById("busca-livre").value = "";
+  atualizarIconesFiltroColuna();
+  renderTudo();
+}
+
+/* -------------------------------------------------------------- cards */
+function renderCards(lista) {
+  const total = lista.length;
+  const abertas = lista.filter((p) => p.Status !== "Encerrada").length;
+  const encerradas = lista.filter((p) => p.Status === "Encerrada").length;
+  const antigas = lista.filter((p) => p.Alerta === "Pendência antiga").length;
+  const reabertas = lista.filter((p) => p.Status === "Reaberta").length;
+  const conclusao = total ? Math.round((encerradas / total) * 1000) / 10 : 0;
+
+  const codigosUnidades = state.unidades.map((u) => u.unidade);
+  const liberadas = codigosUnidades.filter((c) => statusDaUnidade(c, lista) === "Liberada").length;
+  const criticas = codigosUnidades.filter((c) => unidadeECritica(c, lista)).length;
+
+  const cards = [
+    { label: "Total de pendências", valor: total, cls: "" },
+    { label: "Pendências abertas", valor: abertas, cls: "atencao" },
+    { label: "Pendências encerradas", valor: encerradas, cls: "sucesso" },
+    { label: "Pendências antigas", valor: antigas, cls: "alerta" },
+    { label: "Pendências reabertas", valor: reabertas, cls: "alerta" },
+    { label: "% de conclusão", valor: `${conclusao}%`, cls: "sucesso" },
+    { label: "Unidades liberadas", valor: `${liberadas} / ${codigosUnidades.length}`, cls: "sucesso" },
+    { label: "Unidades críticas", valor: criticas, cls: "alerta" },
+  ];
+
+  document.getElementById("cards-indicadores").innerHTML = cards.map((c) => `
+    <div class="kpi-card ${c.cls ? `kpi-card--${c.cls}` : ""}">
+      <div class="kpi-card__label">${c.label}</div>
+      <div class="kpi-card__value">${c.valor}</div>
+    </div>`).join("");
+}
+
+/* ------------------------------------------------------------- heatmap */
+function renderHeatmap(lista) {
+  const pavimentos = [...new Set(state.unidades.map((u) => u.pavimento))].sort((a, b) => b - a);
+  const wrap = document.getElementById("heatmap");
+  wrap.innerHTML = "";
+
+  pavimentos.forEach((pav) => {
+    const row = document.createElement("div"); row.className = "heatmap__row";
+    const label = document.createElement("div"); label.className = "heatmap__pav-label"; label.textContent = `PAV ${pav}`;
+    row.appendChild(label);
+
+    const units = document.createElement("div"); units.className = "heatmap__units";
+    state.unidades.filter((u) => u.pavimento === pav).sort((a, b) => a.unidade.localeCompare(b.unidade)).forEach((u) => {
+      const pend = pendenciasDaUnidade(u.unidade, lista);
+      const abertas = pend.filter((p) => p.Status !== "Encerrada");
+      const status = statusDaUnidade(u.unidade, lista);
+      const critica = unidadeECritica(u.unidade, lista);
+
+      let classe = "hm-cell--nvistoriada";
+      if (status === "Liberada") classe = "hm-cell--liberada";
+      else if (status === "Não vistoriada") classe = "hm-cell--nvistoriada";
+      else if (critica || abertas.length >= 5) classe = "hm-cell--critico";
+      else if (abertas.length >= 3) classe = "hm-cell--intermediario";
+      else if (abertas.length >= 1) classe = "hm-cell--poucas";
+
+      const contagemCrit = {};
+      abertas.forEach((p) => { contagemCrit[p.Criticidade] = (contagemCrit[p.Criticidade] || 0) + 1; });
+      const critPredominante = Object.entries(contagemCrit).sort((a, b) => b[1] - a[1])[0]?.[0] || "—";
+
+      const contagemResp = {};
+      abertas.forEach((p) => { contagemResp[p.Responsavel] = (contagemResp[p.Responsavel] || 0) + 1; });
+      const respTop = Object.entries(contagemResp).sort((a, b) => b[1] - a[1])[0]?.[0] || "—";
+
+      const antigasQtd = abertas.filter((p) => p.Alerta === "Pendência antiga").length;
+
+      const cell = document.createElement("div");
+      cell.className = `hm-cell ${classe}`;
+      cell.innerHTML = `
+        <span class="hm-cell__num">${u.unidade}</span>
+        <span class="hm-cell__count">${abertas.length} pend.</span>
+        <div class="hm-tooltip">
+          <strong>Unidade ${u.unidade}</strong> — ${status}<br>
+          Total de pendências: ${pend.length}<br>
+          Pendências abertas: ${abertas.length}<br>
+          Pendências antigas: ${antigasQtd}<br>
+          Criticidade predominante: ${critPredominante}<br>
+          Responsável com mais pendências: ${respTop}
+        </div>`;
+      units.appendChild(cell);
+    });
+
+    row.appendChild(units); wrap.appendChild(row);
+  });
+}
+
+/* ------------------------------------------------------------- ranking */
+function renderRanking(lista) {
+  const dados = state.unidades.map((u) => ({ unidade: u.unidade, ...pontuacaoUnidade(u.unidade, lista) }));
+  dados.sort((a, b) => b.pontuacao - a.pontuacao);
+  const lista10 = dados.slice(0, 10);
+
+  document.getElementById("ranking-lista").innerHTML = lista10.map((d, i) => `
+    <div class="ranking-item">
+      <div class="ranking-item__pos">${i + 1}</div>
+      <div class="ranking-item__body">
+        <div class="ranking-item__unidade">Unidade ${d.unidade}</div>
+        <div class="ranking-item__detalhe">${d.abertas} abertas · ${d.criticas} críticas · ${d.antigas} antigas · ${d.reabertas} reabertas</div>
+      </div>
+      <div class="ranking-item__score">${d.pontuacao} pts</div>
+    </div>`).join("") || `<p class="text-muted">Sem dados suficientes para priorização.</p>`;
+}
+
+/* -------------------------------------------------------------- gráficos */
+function destruirGrafico(id) { if (state.charts[id]) { state.charts[id].destroy(); delete state.charts[id]; } }
+function contarPor(lista, chave, categorias) {
+  const base = Object.fromEntries(categorias.map((c) => [c, 0]));
+  lista.forEach((p) => { if (base[p[chave]] !== undefined) base[p[chave]] += 1; });
+  return base;
+}
+function baseOpts(extra) {
+  return Object.assign({
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { font: { size: 10.5 } }, grid: { display: false } },
+      y: { ticks: { font: { size: 10.5 } }, grid: { color: "#EEF2F5" } },
+    },
+  }, extra);
+}
+
+function renderGraficos(lista) {
+  destruirGrafico("disciplina");
+  const porDisc = contarPor(lista, "Disciplina", state.disciplinas);
+  state.charts.disciplina = new Chart(document.getElementById("chart-disciplina"), {
+    type: "bar",
+    data: { labels: state.disciplinas, datasets: [{ data: Object.values(porDisc), backgroundColor: CORES.steelLight, borderRadius: 4 }] },
+    options: baseOpts({ indexAxis: "y" }),
+  });
+
+  destruirGrafico("top5");
+  const abertasPorUnidade = state.unidades.map((u) => ({ unidade: u.unidade, qtd: pendenciasDaUnidade(u.unidade, lista).filter((p) => p.Status !== "Encerrada").length }))
+    .sort((a, b) => b.qtd - a.qtd).slice(0, 5);
+  state.charts.top5 = new Chart(document.getElementById("chart-top5"), {
+    type: "bar",
+    data: { labels: abertasPorUnidade.map((u) => `Unidade ${u.unidade}`), datasets: [{ data: abertasPorUnidade.map((u) => u.qtd), backgroundColor: CORES.vermelho, borderRadius: 4 }] },
+    options: baseOpts({}),
+  });
+}
+
+/* -------------------------------------------------------------- tabela */
+function badgeCriticidade(c) {
+  if (!c) return `<span class="badge badge--pendente" title="Engenheiro precisa definir">Definir</span>`;
+  return `<span class="badge badge--crit-${slug(c)}">${c}</span>`;
+}
+function badgeResponsavel(r) {
+  if (!r) return `<span class="badge badge--pendente" title="Engenheiro precisa definir">Definir responsável</span>`;
+  return r;
+}
+function badgeAlerta(a) {
+  const map = { "Dentro do fluxo normal": "normal", "Atenção": "atencao", "Pendência antiga": "antiga", "Encerrada": "encerrada" };
+  return `<span class="badge badge--alerta-${map[a] || "normal"}">${a}</span>`;
+}
+function formatarData(iso) { if (!iso) return "—"; const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; }
+function pendenciaIncompleta(p) { return !p.Criticidade || !p.Responsavel; }
+
+function selectStatusInline(codigo, statusAtual) {
+  const opcoes = STATUS_LIST.map((s) => `<option value="${s}" ${s === statusAtual ? "selected" : ""}>${s}</option>`).join("");
+  return `<select class="select-inline" data-status="${statusAtual}" data-quick-status="${codigo}">${opcoes}</select>`;
+}
+
+function colunaFotos(p) {
+  const antes = p.Foto_Antes ? `<span class="foto-thumb-btn" style="background-image:url('${p.Foto_Antes}')" data-lightbox="${p.Codigo}" data-qual="antes" title="Ver foto antes"></span>` : "";
+  const depois = p.Foto_Depois ? `<span class="foto-thumb-btn" style="background-image:url('${p.Foto_Depois}')" data-lightbox="${p.Codigo}" data-qual="depois" title="Ver foto depois"></span>` : "";
+  if (!antes && !depois) return `<span class="foto-thumb-btn foto-thumb-btn--vazio" title="Sem fotos">—</span>`;
+  return antes + depois;
+}
+
+function renderTabela(lista) {
+  const tbody = document.getElementById("tbody-pendencias");
+  const ordenada = [...lista].sort((a, b) => (b.Dias_Aberto ?? 0) - (a.Dias_Aberto ?? 0));
+
+  tbody.innerHTML = ordenada.map((p) => `
+    <tr class="${pendenciaIncompleta(p) ? "linha-incompleta" : ""}">
+      <td><input type="checkbox" class="chk-linha" data-codigo="${p.Codigo}" ${state.selecionadas.has(p.Codigo) ? "checked" : ""}></td>
+      <td class="cod">${p.Codigo}</td>
+      <td>${p.Unidade}</td>
+      <td>${p.Ranking || "—"}</td>
+      <td>${p.Ambiente}</td>
+      <td>${p.Disciplina}</td>
+      <td class="desc-col">${p.Descricao}</td>
+      <td class="fotos-col">${colunaFotos(p)}</td>
+      <td>${formatarData(p.Data_Abertura)}</td>
+      <td>${p.Dias_Aberto ?? "—"}</td>
+      <td>${badgeResponsavel(p.Responsavel)}</td>
+      <td>${badgeCriticidade(p.Criticidade)}</td>
+      <td>${selectStatusInline(p.Codigo, p.Status)}</td>
+      <td>${badgeAlerta(p.Alerta)}</td>
+      <td class="row-acoes">
+        <button class="icon-btn" data-editar="${p.Codigo}">Editar</button>
+        <button class="icon-btn" data-duplicar="${p.Codigo}">Duplicar</button>
+        <button class="icon-btn" data-excluir="${p.Codigo}">Excluir</button>
+      </td>
+    </tr>`).join("");
+
+  document.getElementById("contagem-resultados").textContent = `${lista.length} pendência(s)`;
+
+  tbody.querySelectorAll("[data-editar]").forEach((btn) => btn.addEventListener("click", () => abrirModal(btn.dataset.editar)));
+  tbody.querySelectorAll("[data-duplicar]").forEach((btn) => btn.addEventListener("click", () => duplicarPendencia(btn.dataset.duplicar)));
+  tbody.querySelectorAll("[data-excluir]").forEach((btn) => btn.addEventListener("click", () => excluirPendencia(btn.dataset.excluir)));
+  tbody.querySelectorAll("[data-quick-status]").forEach((sel) => sel.addEventListener("change", () => alterarStatusRapido(sel.dataset.quickStatus, sel.value)));
+  tbody.querySelectorAll("[data-lightbox]").forEach((el) => el.addEventListener("click", () => abrirLightbox(el.dataset.lightbox, el.dataset.qual)));
+  tbody.querySelectorAll(".chk-linha").forEach((chk) => chk.addEventListener("change", () => alternarSelecao(chk.dataset.codigo, chk.checked)));
+
+  atualizarBulkbar();
+  renderCardsPendenciasMobile(ordenada);
+}
+
+/* -------------------------------------------------------- cartões (mobile) */
+function renderCardsPendenciasMobile(ordenada) {
+  const wrap = document.getElementById("cards-pendencias-mobile");
+  if (!wrap) return;
+
+  wrap.innerHTML = ordenada.map((p) => `
+    <div class="pend-card ${pendenciaIncompleta(p) ? "linha-incompleta" : ""}">
+      <div class="pend-card__top">
+        <div class="pend-card__id">
+          <input type="checkbox" class="chk-linha" data-codigo="${p.Codigo}" ${state.selecionadas.has(p.Codigo) ? "checked" : ""}>
+          <span class="pend-card__cod">${p.Codigo}</span>
+        </div>
+        ${badgeAlerta(p.Alerta)}
+      </div>
+      <div class="pend-card__meta">Unidade ${p.Unidade} (Rk. ${p.Ranking || "—"}) · ${p.Ambiente} · ${p.Disciplina}</div>
+      <div class="pend-card__desc">${p.Descricao}</div>
+      <div class="pend-card__fotos">${colunaFotos(p)}</div>
+      <div class="pend-card__grid">
+        <div><b>Abertura</b>${formatarData(p.Data_Abertura)} · ${p.Dias_Aberto ?? "—"} dias</div>
+        <div><b>Responsável</b>${badgeResponsavel(p.Responsavel)}</div>
+        <div><b>Criticidade</b>${badgeCriticidade(p.Criticidade)}</div>
+        <div class="pend-card__status"><b>Status</b>${selectStatusInline(p.Codigo, p.Status)}</div>
+      </div>
+      <div class="pend-card__acoes">
+        <button class="icon-btn" data-editar="${p.Codigo}">Editar</button>
+        <button class="icon-btn" data-duplicar="${p.Codigo}">Duplicar</button>
+        <button class="icon-btn" data-excluir="${p.Codigo}">Excluir</button>
+      </div>
+    </div>`).join("") || `<p class="text-muted">Nenhuma pendência encontrada.</p>`;
+
+  wrap.querySelectorAll("[data-editar]").forEach((btn) => btn.addEventListener("click", () => abrirModal(btn.dataset.editar)));
+  wrap.querySelectorAll("[data-duplicar]").forEach((btn) => btn.addEventListener("click", () => duplicarPendencia(btn.dataset.duplicar)));
+  wrap.querySelectorAll("[data-excluir]").forEach((btn) => btn.addEventListener("click", () => excluirPendencia(btn.dataset.excluir)));
+  wrap.querySelectorAll("[data-quick-status]").forEach((sel) => sel.addEventListener("change", () => alterarStatusRapido(sel.dataset.quickStatus, sel.value)));
+  wrap.querySelectorAll("[data-lightbox]").forEach((el) => el.addEventListener("click", () => abrirLightbox(el.dataset.lightbox, el.dataset.qual)));
+  wrap.querySelectorAll(".chk-linha").forEach((chk) => chk.addEventListener("change", () => alternarSelecao(chk.dataset.codigo, chk.checked)));
+}
+
+/* --------------------------------------------------------- seleção em massa */
+function alternarSelecao(codigo, marcado) {
+  if (marcado) state.selecionadas.add(codigo); else state.selecionadas.delete(codigo);
+  atualizarBulkbar();
+  const chkTudo = document.getElementById("chk-selecionar-tudo");
+  if (chkTudo) chkTudo.checked = false;
+}
+
+function alternarSelecaoTudo(marcado) {
+  const codigosVisiveis = [...document.querySelectorAll(".chk-linha")].map((c) => c.dataset.codigo);
+  if (marcado) codigosVisiveis.forEach((c) => state.selecionadas.add(c));
+  else codigosVisiveis.forEach((c) => state.selecionadas.delete(c));
+  document.querySelectorAll(".chk-linha").forEach((c) => { c.checked = marcado; });
+  atualizarBulkbar();
+}
+
+function atualizarBulkbar() {
+  const bar = document.getElementById("bulkbar");
+  const count = state.selecionadas.size;
+  document.getElementById("bulkbar-count").textContent = `${count} selecionada(s)`;
+  bar.hidden = count === 0;
+}
+
+function limparSelecao() {
+  state.selecionadas.clear();
+  document.querySelectorAll(".chk-linha").forEach((c) => { c.checked = false; });
+  const chkTudo = document.getElementById("chk-selecionar-tudo");
+  if (chkTudo) chkTudo.checked = false;
+  atualizarBulkbar();
+}
+
+function aplicarStatusEmMassa() {
+  const novoStatus = document.getElementById("bulk-status").value;
+  if (!novoStatus || state.selecionadas.size === 0) return;
+  const codigos = [...state.selecionadas];
+  const batch = db.batch();
+  codigos.forEach((codigo) => {
+    const p = state.pendencias.find((x) => x.Codigo === codigo);
+    if (!p) return;
+    const atualizado = { ...p, Status: novoStatus };
+    if (novoStatus === "Encerrada" && !atualizado.Data_Conferencia) atualizado.Data_Conferencia = new Date().toISOString().slice(0, 10);
+    batch.set(db.collection("pendencias").doc(codigo), atualizado);
+  });
+  batch.commit().catch(erroFirestore);
+  const qtd = state.selecionadas.size;
+  limparSelecao();
+  toast(`${qtd} pendência(s) atualizada(s) para "${novoStatus}".`);
+}
+
+function excluirEmMassa() {
+  if (state.selecionadas.size === 0) return;
+  if (!confirm(`Excluir ${state.selecionadas.size} pendência(s) selecionada(s)? Esta ação não pode ser desfeita.`)) return;
+  const codigos = [...state.selecionadas];
+  const batch = db.batch();
+  codigos.forEach((codigo) => batch.delete(db.collection("pendencias").doc(codigo)));
+  batch.commit().catch(erroFirestore);
+  const qtd = state.selecionadas.size;
+  state.selecionadas.clear();
+  toast(`${qtd} pendência(s) excluída(s).`);
+}
+
+function alterarStatusRapido(codigo, novoStatus) {
+  const p = state.pendencias.find((x) => x.Codigo === codigo);
+  if (!p) return;
+  const atualizado = { ...p, Status: novoStatus };
+  if (novoStatus === "Encerrada" && !atualizado.Data_Conferencia) atualizado.Data_Conferencia = new Date().toISOString().slice(0, 10);
+  db.collection("pendencias").doc(codigo).set(atualizado).catch(erroFirestore);
+  toast(`Status da pendência ${codigo} alterado para "${novoStatus}".`);
+}
+
+function duplicarPendencia(codigo) {
+  const original = state.pendencias.find((p) => p.Codigo === codigo);
+  if (!original) return;
+  const copia = { ...original, Codigo: "", Data_Abertura: new Date().toISOString().slice(0, 10), Status: "Aberta", Data_Conferencia: "" };
+  abrirModal(null, copia);
+  toast(`Pendência ${codigo} duplicada — revise e salve.`);
+}
+
+/* -------------------------------------------------------------- lightbox */
+function abrirLightbox(codigo, qualFoto) {
+  const p = state.pendencias.find((x) => x.Codigo === codigo);
+  if (!p) return;
+  const itens = [];
+  if (p.Foto_Antes) itens.push({ src: p.Foto_Antes, legenda: "Antes" });
+  if (p.Foto_Depois) itens.push({ src: p.Foto_Depois, legenda: "Depois" });
+  if (!itens.length) return;
+
+  const ordenados = qualFoto === "depois" ? itens.reverse() : itens;
+  document.getElementById("lightbox-conteudo").innerHTML = ordenados.map((item) => `
+    <figure><img src="${item.src}" alt="Foto ${item.legenda} — ${codigo}"><figcaption>${item.legenda} · ${codigo}</figcaption></figure>
+  `).join("");
+  document.getElementById("lightbox-overlay").hidden = false;
+}
+function fecharLightbox() { document.getElementById("lightbox-overlay").hidden = true; }
+
+/* =========================================================================
+   Relatório em PDF — respeita os filtros aplicados na tela
+   ========================================================================= */
+function descreverFiltrosAtivosPDF() {
+  const partes = [];
+  const rotulos = { Unidade: "Unidade", Ambiente: "Ambiente", Disciplina: "Disciplina", Responsavel: "Responsável", Criticidade: "Criticidade", Status: "Status", Alerta: "Alerta" };
+  for (const campo in state.filtrosColuna) {
+    const vals = [...state.filtrosColuna[campo]];
+    partes.push(`${rotulos[campo] || campo}: ${vals.join(", ")}`);
+  }
+  const busca = document.getElementById("busca-livre").value.trim();
+  if (busca) partes.push(`Busca livre: "${busca}"`);
+  return partes.length ? partes.join("  ·  ") : "Nenhum filtro aplicado — todas as pendências";
+}
+
+function nomeArquivoPDF() {
+  const data = new Date().toISOString().slice(0, 10);
+  return `relatorio_pendencias_${slug(state.config.nomeObra) || "obra"}_${data}.pdf`;
+}
+
+function desenharTabelaManualPDF(doc, ordenada, startY, larguraPagina) {
+  const colunas = [
+    { titulo: "Foto", largura: 66 },
+    { titulo: "Código", largura: 50 },
+    { titulo: "Unidade", largura: 48 },
+    { titulo: "Ambiente", largura: 70 },
+    { titulo: "Disciplina", largura: 70 },
+    { titulo: "Descrição", largura: 150 },
+    { titulo: "Abertura", largura: 55 },
+    { titulo: "Responsável", largura: 80 },
+    { titulo: "Status", largura: 80 },
+    { titulo: "Alerta", largura: 80 },
+  ];
+  const margemEsquerda = 28;
+  const alturaLinha = 52;
+  const alturaPagina = doc.internal.pageSize.getHeight();
+  let y = startY;
+
+  function desenharCabecalhoTabela() {
+    doc.setFillColor(44, 95, 124);
+    doc.setDrawColor(44, 95, 124);
+    doc.rect(margemEsquerda, y, colunas.reduce((a, c) => a + c.largura, 0), 20, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(255, 255, 255);
+    let x = margemEsquerda;
+    colunas.forEach((c) => { doc.text(c.titulo, x + 4, y + 13); x += c.largura; });
+    y += 20;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(40, 40, 40);
+    doc.setFontSize(8);
+  }
+
+  desenharCabecalhoTabela();
+
+  ordenada.forEach((p, idx) => {
+    if (!p) return;
+    if (y + alturaLinha > alturaPagina - 30) {
+      doc.addPage();
+      y = 28;
+      desenharCabecalhoTabela();
+    }
+    const larguraTotal = colunas.reduce((a, c) => a + c.largura, 0);
+    if (idx % 2 === 1) { doc.setFillColor(247, 250, 252); doc.rect(margemEsquerda, y, larguraTotal, alturaLinha, "F"); }
+    doc.setDrawColor(225, 230, 234);
+    doc.rect(margemEsquerda, y, larguraTotal, alturaLinha);
+
+    let x = margemEsquerda;
+    const foto = p.Foto_Antes || p.Foto_Depois;
+    if (foto) {
+      try {
+        const formato = foto.includes("image/png") ? "PNG" : "JPEG";
+        doc.addImage(foto, formato, x + 4, y + 4, 58, 44);
+      } catch (e) { /* imagem inválida — ignora */ }
+    }
+    x += colunas[0].largura;
+
+    const valores = [p.Codigo, p.Unidade, p.Ambiente, p.Disciplina, p.Descricao, formatarData(p.Data_Abertura), p.Responsavel || "A definir", p.Status, p.Alerta];
+    valores.forEach((valor, i) => {
+      const larguraCol = colunas[i + 1].largura;
+      const linhas = doc.splitTextToSize(String(valor ?? ""), larguraCol - 8).slice(0, 4);
+      doc.text(linhas, x + 4, y + 12);
+      x += larguraCol;
+    });
+
+    y += alturaLinha;
+  });
+
+  return y;
+}
+
+function baixarPDFPendencias() {
+  try {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      alert("Não foi possível gerar o PDF: a biblioteca de geração de PDF não carregou.\n\nIsso costuma acontecer por falta de conexão com a internet no momento em que a página abriu (as bibliotecas vêm de um servidor externo). Recarregue a página com internet ativa e tente de novo.");
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    const larguraPagina = doc.internal.pageSize.getWidth();
+
+    const lista = aplicarFiltrosTabela(state.pendencias);
+    const ordenada = [...lista].sort((a, b) => (b.Dias_Aberto ?? 0) - (a.Dias_Aberto ?? 0));
+
+    // Cabeçalho do relatório
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.setTextColor(29, 67, 86);
+    doc.text(state.config.nomeObra || "Painel de Terminalidade", 28, 30);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(70, 70, 70);
+    doc.text(`Relatório de Pendências — gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, 28, 46);
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(120, 120, 120);
+    const filtrosTexto = doc.splitTextToSize(`Filtros aplicados: ${descreverFiltrosAtivosPDF()}`, larguraPagina - 56);
+    doc.text(filtrosTexto, 28, 60);
+    const yAposFiltros = 60 + (filtrosTexto.length - 1) * 10;
+    doc.text(`${ordenada.length} pendência(s) neste relatório`, 28, yAposFiltros + 12);
+
+    const startY = yAposFiltros + 20;
+
+    if (typeof doc.autoTable === "function") {
+      // Caminho principal: plugin jspdf-autotable disponível
+      const linhasTabela = ordenada.map((p) => [
+        "", p.Codigo, p.Unidade, p.Ambiente, p.Disciplina, p.Descricao,
+        formatarData(p.Data_Abertura), p.Responsavel || "A definir", p.Status, p.Alerta,
+      ]);
+
+      doc.autoTable({
+        startY,
+        head: [["Foto", "Código", "Unidade", "Ambiente", "Disciplina", "Descrição", "Abertura", "Responsável", "Status", "Alerta"]],
+        body: linhasTabela,
+        styles: { fontSize: 8, cellPadding: 5, valign: "middle", minCellHeight: 50, font: "helvetica" },
+        headStyles: { fillColor: [44, 95, 124], textColor: 255, fontSize: 8.5 },
+        alternateRowStyles: { fillColor: [247, 250, 252] },
+        columnStyles: { 0: { cellWidth: 66 }, 1: { cellWidth: 46 }, 5: { cellWidth: "auto" } },
+        margin: { left: 28, right: 28 },
+        didDrawCell: (data) => {
+          if (data.section === "body" && data.column.index === 0) {
+            const codigoLinha = data.row.raw && data.row.raw[1];
+            const p = codigoLinha ? ordenada.find((x) => x.Codigo === codigoLinha) : null;
+            if (!p) return;
+            const foto = p.Foto_Antes || p.Foto_Depois;
+            if (foto) {
+              try {
+                const formato = foto.includes("image/png") ? "PNG" : "JPEG";
+                doc.addImage(foto, formato, data.cell.x + 4, data.cell.y + 3, 58, 44);
+              } catch (e) { /* imagem inválida — ignora silenciosamente */ }
+            }
+          }
+        },
+      });
+    } else {
+      // Reserva: plugin de tabela indisponível — desenha uma tabela simples manualmente,
+      // assim o relatório ainda é gerado mesmo se o plugin não carregar.
+      desenharTabelaManualPDF(doc, ordenada, startY, larguraPagina);
+    }
+
+    // Numeração "Página X de Y" — feita depois de todo o conteúdo pronto,
+    // para o total (Y) já estar correto em todas as páginas.
+    const totalPaginas = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPaginas; i++) {
+      doc.setPage(i);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(140, 140, 140);
+      doc.text(`Página ${i} de ${totalPaginas}`, larguraPagina - 90, doc.internal.pageSize.getHeight() - 14);
+      doc.text("Gerado pelo Painel de Terminalidade", 28, doc.internal.pageSize.getHeight() - 14);
+    }
+
+    doc.save(nomeArquivoPDF());
+    toast("PDF gerado.");
+  } catch (erro) {
+    console.error("Falha ao gerar PDF:", erro);
+    alert(`Não foi possível gerar o PDF.\n\nDetalhe técnico: ${erro && erro.message ? erro.message : "erro desconhecido"}\n\nSe puder, copie essa mensagem e envie para quem está desenvolvendo o painel.`);
+  }
+}
+
+/* =========================================================================
+   Chat guiado — cadastro rápido de pendências
+   Máquina de estados simples (sem IA): o bot pergunta, o usuário toca numa
+   opção ou digita um texto curto, o bot passa pra próxima pergunta.
+   ========================================================================= */
+const ETAPAS_CHAT = ["unidade", "ambiente", "disciplina", "descricao", "foto", "confirmar"];
+
+const chat = { etapaIndex: 0, rascunho: {}, fotoDataUrl: "", etapaOutroOrigem: null };
+
+function abrirChat() {
+  document.getElementById("chat-panel").hidden = false;
+  document.getElementById("chat-fab").hidden = true;
+  if (document.getElementById("chat-corpo").innerHTML.trim() === "") iniciarChat();
+}
+
+function fecharChat() {
+  document.getElementById("chat-panel").hidden = true;
+  document.getElementById("chat-fab").hidden = false;
+}
+
+function iniciarChat() {
+  chat.etapaIndex = 0;
+  chat.rascunho = {};
+  chat.fotoDataUrl = "";
+  document.getElementById("chat-corpo").innerHTML = "";
+  adicionarMensagemBot("Oi! Vamos registrar uma pendência rapidinho. 👷");
+  renderEtapaAtual();
+}
+
+function adicionarMensagemBot(html) {
+  const corpo = document.getElementById("chat-corpo");
+  const div = document.createElement("div");
+  div.className = "chat-msg chat-msg--bot";
+  div.innerHTML = `<div class="chat-msg__bubble">${html}</div>`;
+  corpo.appendChild(div);
+  corpo.scrollTop = corpo.scrollHeight;
+}
+
+function adicionarMensagemUsuario(html) {
+  const corpo = document.getElementById("chat-corpo");
+  const div = document.createElement("div");
+  div.className = "chat-msg chat-msg--user";
+  div.innerHTML = `<div class="chat-msg__bubble">${html}</div>`;
+  corpo.appendChild(div);
+  corpo.scrollTop = corpo.scrollHeight;
+}
+
+const ETAPAS_COM_OUTRO = ["unidade", "ambiente", "disciplina"];
+const CATALOGO_POR_ETAPA = { ambiente: "ambientes", disciplina: "disciplinas" };
+
+function opcoesParaEtapaChat(etapa) {
+  if (etapa === "unidade") return [...state.unidades].sort((a, b) => a.unidade.localeCompare(b.unidade)).map((u) => u.unidade);
+  if (etapa === "ambiente") return state.ambientes;
+  if (etapa === "disciplina") return state.disciplinas;
+  if (etapa === "criticidade") return CRITICIDADES;
+  if (etapa === "responsavel") return state.responsaveis;
+  return [];
+}
+
+function perguntaParaEtapaChat(etapa) {
+  const perguntas = {
+    unidade: "Qual é a <strong>unidade</strong>?",
+    ambiente: "Em qual <strong>ambiente</strong>?",
+    disciplina: "Qual a <strong>disciplina</strong>?",
+    criticidade: "Qual a <strong>criticidade</strong>?",
+    responsavel: "Quem é o <strong>responsável</strong>?",
+    descricao: "Descreva a pendência em poucas palavras:",
+    foto: "Quer anexar uma foto? (opcional)",
+  };
+  return perguntas[etapa] || "";
+}
+
+function renderEtapaAtual() {
+  const etapa = ETAPAS_CHAT[chat.etapaIndex];
+  const areaInput = document.getElementById("chat-input-area");
+
+  if (etapa === "confirmar") { renderConfirmacaoChat(); return; }
+
+  adicionarMensagemBot(perguntaParaEtapaChat(etapa));
+  let html = chat.etapaIndex > 0 ? `<button class="chat-voltar" id="chat-voltar-btn">‹ voltar</button>` : "";
+
+  if (etapa === "descricao") {
+    html += `
+      <div class="chat-texto-row">
+        <textarea id="chat-campo-texto" rows="1" placeholder="Ex.: Retoque de pintura no rodapé"></textarea>
+        <button id="chat-enviar-texto">Enviar</button>
+      </div>`;
+    areaInput.innerHTML = html;
+    document.getElementById("chat-voltar-btn")?.addEventListener("click", voltarEtapaChat);
+    document.getElementById("chat-enviar-texto").addEventListener("click", enviarDescricaoChat);
+    document.getElementById("chat-campo-texto").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviarDescricaoChat(); }
+    });
+    document.getElementById("chat-campo-texto").focus();
+    return;
+  }
+
+  if (etapa === "foto") {
+    html += `
+      <div class="chat-acoes">
+        <button class="btn btn--primary" id="chat-tirar-foto">📷 Tirar foto</button>
+        <button class="btn btn--ghost" id="chat-galeria-foto">🖼️ Da galeria</button>
+      </div>
+      <div class="chat-acoes" style="margin-top:6px;">
+        <button class="btn btn--ghost" id="chat-pular-foto">Pular esta etapa</button>
+      </div>
+      <input type="file" id="chat-input-foto-camera" accept="image/*" capture="environment" hidden>
+      <input type="file" id="chat-input-foto-galeria" accept="image/*" hidden>`;
+    areaInput.innerHTML = html;
+    document.getElementById("chat-voltar-btn")?.addEventListener("click", voltarEtapaChat);
+    document.getElementById("chat-tirar-foto").addEventListener("click", () => document.getElementById("chat-input-foto-camera").click());
+    document.getElementById("chat-galeria-foto").addEventListener("click", () => document.getElementById("chat-input-foto-galeria").click());
+    document.getElementById("chat-pular-foto").addEventListener("click", avancarEtapaChat);
+    document.getElementById("chat-input-foto-camera").addEventListener("change", (e) => handleFotoChat(e.target));
+    document.getElementById("chat-input-foto-galeria").addEventListener("change", (e) => handleFotoChat(e.target));
+    return;
+  }
+
+  if (etapa === "outro-texto") { renderOutroTexto(); return; }
+
+  // etapas de escolha por chips (unidade, ambiente, disciplina, criticidade, responsavel)
+  const opcoes = opcoesParaEtapaChat(etapa);
+  const precisaFiltro = opcoes.length > 8;
+  if (precisaFiltro) html += `<input type="text" class="chat-filtro" id="chat-filtro" placeholder="Digite para filtrar…">`;
+  html += `<div class="chat-chips" id="chat-chips">${opcoes.map((v) => `<button class="chat-chip" data-valor="${v}">${v}</button>`).join("") || '<span class="text-muted">Nenhuma opção cadastrada.</span>'}`;
+  if (ETAPAS_COM_OUTRO.includes(etapa)) html += `<button class="chat-chip chat-chip--outro" id="chat-chip-outro">+ Outro</button>`;
+  html += `</div>`;
+  areaInput.innerHTML = html;
+
+  document.getElementById("chat-voltar-btn")?.addEventListener("click", voltarEtapaChat);
+  areaInput.querySelectorAll(".chat-chip:not(.chat-chip--outro)").forEach((btn) => btn.addEventListener("click", () => escolherOpcaoChat(etapa, btn.dataset.valor)));
+  document.getElementById("chat-chip-outro")?.addEventListener("click", () => iniciarOutroChat(etapa));
+  if (precisaFiltro) {
+    document.getElementById("chat-filtro").addEventListener("input", (e) => {
+      const termo = e.target.value.toLowerCase();
+      areaInput.querySelectorAll("#chat-chips .chat-chip:not(.chat-chip--outro)").forEach((chip) => {
+        chip.style.display = chip.dataset.valor.toLowerCase().includes(termo) ? "" : "none";
+      });
+    });
+  }
+}
+
+function iniciarOutroChat(etapaOrigem) {
+  chat.etapaOutroOrigem = etapaOrigem;
+  adicionarMensagemUsuario("Outro…");
+  ETAPAS_CHAT.splice(chat.etapaIndex + 1, 0, "outro-texto");
+  avancarEtapaChat();
+}
+
+function renderOutroTexto() {
+  const etapaOrigem = chat.etapaOutroOrigem;
+  const rotulos = { unidade: "a unidade", ambiente: "o ambiente", disciplina: "a disciplina", responsavel: "o responsável" };
+  adicionarMensagemBot(`Digite ${rotulos[etapaOrigem] || "o valor"}:`);
+  const areaInput = document.getElementById("chat-input-area");
+  areaInput.innerHTML = `
+    <button class="chat-voltar" id="chat-voltar-btn">‹ voltar</button>
+    <div class="chat-texto-row">
+      <input type="text" id="chat-campo-outro" placeholder="Digite aqui…">
+      <button id="chat-enviar-outro">OK</button>
+    </div>`;
+  document.getElementById("chat-voltar-btn").addEventListener("click", voltarEtapaChat);
+  document.getElementById("chat-enviar-outro").addEventListener("click", () => confirmarOutroChat(etapaOrigem));
+  document.getElementById("chat-campo-outro").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); confirmarOutroChat(etapaOrigem); }
+  });
+  document.getElementById("chat-campo-outro").focus();
+}
+
+function confirmarOutroChat(etapaOrigem) {
+  const campo = document.getElementById("chat-campo-outro");
+  const valor = campo.value.trim();
+  if (!valor) return;
+
+  // adiciona o novo valor ao catálogo correspondente, se ainda não existir
+  const campoCatalogo = CATALOGO_POR_ETAPA[etapaOrigem];
+  if (campoCatalogo && !state[campoCatalogo].some((v) => v.toLowerCase() === valor.toLowerCase())) {
+    state[campoCatalogo] = [...state[campoCatalogo], valor];
+    salvarConfigFirestore().catch(erroFirestore);
+  }
+  if (etapaOrigem === "unidade" && !state.unidades.some((u) => u.unidade === valor)) {
+    state.unidades = [...state.unidades, { unidade: valor, pavimento: "—", posicao: "", ranking: String(state.unidades.length + 1) }];
+    salvarUnidadesFirestore().catch(erroFirestore);
+  }
+  popularSelectsEstaticos();
+
+  chat.rascunho[etapaOrigem] = valor;
+  adicionarMensagemUsuario(valor);
+
+  // remove a etapa temporária "outro-texto" da fila e segue exatamente para a
+  // etapa que ficaria em seguida (sem incrementar de novo, pois a remoção já
+  // empurra o próximo item para a posição atual)
+  const idx = ETAPAS_CHAT.indexOf("outro-texto");
+  if (idx > -1) {
+    ETAPAS_CHAT.splice(idx, 1);
+    chat.etapaIndex = idx;
+    renderEtapaAtual();
+  } else {
+    avancarEtapaChat();
+  }
+}
+
+function escolherOpcaoChat(etapa, valor) {
+  chat.rascunho[etapa] = valor;
+  adicionarMensagemUsuario(valor);
+  avancarEtapaChat();
+}
+
+function enviarDescricaoChat() {
+  const campo = document.getElementById("chat-campo-texto");
+  const valor = campo.value.trim();
+  if (!valor) return;
+  chat.rascunho.descricao = valor;
+  adicionarMensagemUsuario(valor);
+  avancarEtapaChat();
+}
+
+function handleFotoChat(inputEl) {
+  const arquivo = inputEl.files[0];
+  if (!arquivo) return;
+  comprimirImagem(arquivo, 640, 0.72)
+    .then((dataUrl) => {
+      chat.fotoDataUrl = dataUrl;
+      adicionarMensagemUsuario(`<div class="chat-foto-preview"><img src="${dataUrl}" alt="Foto anexada"></div>`);
+      avancarEtapaChat();
+    })
+    .catch(() => toast("Não foi possível carregar essa imagem."));
+}
+
+function avancarEtapaChat() {
+  chat.etapaIndex += 1;
+  renderEtapaAtual();
+}
+
+function voltarEtapaChat() {
+  if (chat.etapaIndex === 0) return;
+  const etapaAtual = ETAPAS_CHAT[chat.etapaIndex];
+
+  const corpo = document.getElementById("chat-corpo");
+  if (corpo.lastElementChild) corpo.removeChild(corpo.lastElementChild);
+  if (corpo.lastElementChild) corpo.removeChild(corpo.lastElementChild);
+
+  if (etapaAtual === "outro-texto") {
+    // sai do campo "outro" sem confirmar: remove a etapa temporária da fila
+    // e volta exatamente para a lista de chips de onde ela foi aberta
+    ETAPAS_CHAT.splice(chat.etapaIndex, 1);
+    chat.etapaIndex -= 1;
+    renderEtapaAtual();
+    return;
+  }
+
+  const etapaAnterior = ETAPAS_CHAT[chat.etapaIndex - 1];
+  delete chat.rascunho[etapaAnterior];
+  if (etapaAnterior === "foto") chat.fotoDataUrl = "";
+
+  chat.etapaIndex -= 1;
+  renderEtapaAtual();
+}
+
+function renderConfirmacaoChat() {
+  const r = chat.rascunho;
+  adicionarMensagemBot(`
+    Confere se está tudo certo:
+    <div class="chat-resumo">
+      <div><b>Unidade:</b> ${r.unidade}</div>
+      <div><b>Ambiente:</b> ${r.ambiente}</div>
+      <div><b>Disciplina:</b> ${r.disciplina}</div>
+      <div><b>Descrição:</b> ${r.descricao}</div>
+      ${chat.fotoDataUrl ? `<div class="chat-foto-preview"><img src="${chat.fotoDataUrl}"></div>` : ""}
+    </div>
+    <p style="margin-top:8px; font-size:12px; color:var(--ink-mute);">
+      Criticidade e responsável ficam em aberto — o engenheiro completa depois na aba Pendências.
+    </p>`);
+
+  const areaInput = document.getElementById("chat-input-area");
+  areaInput.innerHTML = `
+    <button class="chat-voltar" id="chat-voltar-btn">‹ voltar</button>
+    <div class="chat-acoes">
+      <button class="btn btn--primary" id="chat-confirmar">✅ Confirmar</button>
+      <button class="btn btn--ghost" id="chat-cancelar">Cancelar</button>
+    </div>`;
+  document.getElementById("chat-voltar-btn").addEventListener("click", voltarEtapaChat);
+  document.getElementById("chat-confirmar").addEventListener("click", confirmarPendenciaChat);
+  document.getElementById("chat-cancelar").addEventListener("click", () => {
+    adicionarMensagemBot("Sem problemas, cadastro cancelado.");
+    mostrarBotaoRecomecarChat();
+  });
+}
+
+function mostrarBotaoRecomecarChat() {
+  document.getElementById("chat-input-area").innerHTML = `<div class="chat-acoes"><button class="btn btn--primary" id="chat-recomecar">+ Nova pendência</button></div>`;
+  document.getElementById("chat-recomecar").addEventListener("click", iniciarChat);
+}
+
+function confirmarPendenciaChat() {
+  const r = chat.rascunho;
+  const infoUnidade = unidadeInfo(r.unidade);
+  const nova = {
+    Codigo: proximoCodigo(),
+    Unidade: r.unidade,
+    Ranking: infoUnidade.ranking || "",
+    Ambiente: r.ambiente,
+    Disciplina: r.disciplina,
+    Descricao: r.descricao,
+    Data_Abertura: new Date().toISOString().slice(0, 10),
+    Responsavel: "",
+    Criticidade: "",
+    Status: "Aberta",
+    Data_Conferencia: "",
+    Foto_Antes: chat.fotoDataUrl || "",
+    Foto_Depois: "",
+    Observacoes: "",
+  };
+
+  const erro = validarPendenciaChat(nova);
+  if (erro) { adicionarMensagemBot(`Não consegui salvar: ${erro}`); return; }
+
+  db.collection("pendencias").doc(nova.Codigo).set(nova).catch(erroFirestore);
+
+  adicionarMensagemBot(`Pendência <strong>${nova.Codigo}</strong> registrada! Falta só a criticidade e o responsável — o engenheiro completa isso na aba Pendências. 🎉`);
+  mostrarBotaoRecomecarChat();
+  toast(`Pendência ${nova.Codigo} cadastrada pelo chat — falta completar criticidade e responsável.`);
+}
+
+
+
+/* -------------------------------------------------------- unidades e ranking */
+function renderTabelaUnidades() {
+  const tbody = document.getElementById("tbody-unidades");
+  if (!tbody) return;
+
+  const busca = (document.getElementById("busca-unidades").value || "").trim().toLowerCase();
+  const unidadesOrdenadas = [...state.unidades].sort((a, b) => a.unidade.localeCompare(b.unidade));
+  const filtradas = busca ? unidadesOrdenadas.filter((u) => u.unidade.toLowerCase().includes(busca)) : unidadesOrdenadas;
+
+  tbody.innerHTML = filtradas.map((u) => {
+    const abertas = pendenciasDaUnidade(u.unidade).filter((p) => p.Status !== "Encerrada").length;
+    const status = statusDaUnidade(u.unidade);
+    return `
+    <tr>
+      <td class="cod">${u.unidade}</td>
+      <td><input type="text" class="input-inline" data-campo="pavimento" data-unidade="${u.unidade}" value="${u.pavimento}"></td>
+      <td><input type="text" class="input-inline" data-campo="ranking" data-unidade="${u.unidade}" value="${u.ranking}"></td>
+      <td>${status}</td>
+      <td>${abertas}</td>
+      <td><button class="icon-btn" data-remover-unidade="${u.unidade}">Remover</button></td>
+    </tr>`;
+  }).join("");
+
+  tbody.querySelectorAll(".input-inline").forEach((input) => {
+    input.addEventListener("change", () => atualizarUnidade(input.dataset.unidade, input.dataset.campo, input.value, input));
+  });
+  tbody.querySelectorAll("[data-remover-unidade]").forEach((btn) => {
+    btn.addEventListener("click", () => removerUnidade(btn.dataset.removerUnidade));
+  });
+}
+
+function atualizarUnidade(codigoUnidade, campo, valor, inputEl) {
+  const unidade = state.unidades.find((u) => u.unidade === codigoUnidade);
+  if (!unidade) return;
+
+  state.unidades = state.unidades.map((u) => u.unidade === codigoUnidade ? { ...u, [campo]: valor.trim() } : u);
+  salvarUnidadesFirestore().catch(erroFirestore);
+
+  if (inputEl) {
+    inputEl.classList.add("input-inline--saved");
+    setTimeout(() => inputEl.classList.remove("input-inline--saved"), 900);
+  }
+
+  // Atualiza dashboard e ranking prioritário, sem re-renderizar a própria
+  // tabela de unidades (evitaria perder o foco do campo em edição).
+  const filtradasGlobal = aplicarFiltrosGlobais(state.pendencias);
+  renderCards(filtradasGlobal);
+  renderHeatmap(filtradasGlobal);
+  renderRanking(filtradasGlobal);
+  renderGraficos(filtradasGlobal);
+  toast(`Unidade ${codigoUnidade} atualizada.`);
+}
+
+function adicionarUnidade() {
+  const codigo = document.getElementById("nova-unidade-codigo").value.trim();
+  const pavimento = document.getElementById("nova-unidade-pavimento").value.trim();
+  const ranking = document.getElementById("nova-unidade-ranking").value.trim();
+
+  if (!codigo) { toast("Informe o código da unidade."); return; }
+  if (state.unidades.some((u) => u.unidade === codigo)) { toast(`A unidade ${codigo} já existe.`); return; }
+
+  state.unidades = [...state.unidades, { unidade: codigo, pavimento: pavimento || "—", posicao: "", ranking: ranking || String(state.unidades.length + 1) }];
+  salvarUnidadesFirestore().catch(erroFirestore);
+  popularSelectsEstaticos();
+  renderTabelaUnidades();
+  ["nova-unidade-codigo", "nova-unidade-pavimento", "nova-unidade-ranking"].forEach((id) => (document.getElementById(id).value = ""));
+  toast(`Unidade ${codigo} adicionada.`);
+}
+
+function removerUnidade(codigo) {
+  const pendenciasVinculadas = pendenciasDaUnidade(codigo).length;
+  const aviso = pendenciasVinculadas
+    ? `A unidade ${codigo} possui ${pendenciasVinculadas} pendência(s) registrada(s). Elas não serão excluídas, mas deixarão de aparecer nos filtros por unidade. Deseja remover mesmo assim?`
+    : `Remover a unidade ${codigo}? Esta ação não pode ser desfeita.`;
+  if (!confirm(aviso)) return;
+
+  state.unidades = state.unidades.filter((u) => u.unidade !== codigo);
+  salvarUnidadesFirestore().catch(erroFirestore);
+  popularSelectsEstaticos();
+  renderTabelaUnidades();
+  toast(`Unidade ${codigo} removida.`);
+}
+
+function restaurarRankingPadrao() {
+  if (!confirm("Isso vai substituir o Ranking de todas as unidades pelos valores padrão gerados originalmente. As pendências já cadastradas não são alteradas. Deseja continuar?")) return;
+  const padrao = gerarUnidades();
+  state.unidades = state.unidades.map((u) => {
+    const base = padrao.find((p) => p.unidade === u.unidade);
+    return base ? { ...u, ranking: base.ranking } : u;
+  });
+  salvarUnidadesFirestore().catch(erroFirestore);
+  renderTabelaUnidades();
+  toast("Ranking padrão restaurado.");
+}
+
+/* --------------------------------------------------- configuração da obra */
+function salvarConfigObra() {
+  const nome = document.getElementById("cfg-nome-obra").value.trim();
+  const subtitulo = document.getElementById("cfg-subtitulo").value.trim();
+  if (!nome) { toast("Informe o nome da obra."); return; }
+  state.config = { nomeObra: nome, subtitulo: subtitulo || CONFIG_PADRAO.subtitulo };
+  salvarConfigFirestore().catch(erroFirestore);
+  aplicarConfigObra();
+  toast("Configurações da obra salvas.");
+}
+
+/* ------------------------------------------------------- catálogos editáveis */
+function renderChips(campo, containerId) {
+  const container = document.getElementById(containerId);
+  const lista = state[campo];
+  container.innerHTML = lista.map((valor) => `
+    <span class="chip">
+      ${valor}
+      <button type="button" class="chip__remover" data-campo="${campo}" data-valor="${valor}" title="Remover">✕</button>
+    </span>`).join("") || `<p class="text-muted" style="margin:0;">Nenhum item cadastrado.</p>`;
+
+  container.querySelectorAll(".chip__remover").forEach((btn) => {
+    btn.addEventListener("click", () => removerItemCatalogo(btn.dataset.campo, btn.dataset.valor, containerId));
+  });
+}
+
+function adicionarItemCatalogo(campo, inputId, containerId) {
+  const input = document.getElementById(inputId);
+  const valor = input.value.trim();
+  if (!valor) return;
+  const jaExiste = state[campo].some((v) => v.toLowerCase() === valor.toLowerCase());
+  if (jaExiste) { toast(`"${valor}" já está na lista.`); return; }
+
+  state[campo] = [...state[campo], valor];
+  salvarConfigFirestore().catch(erroFirestore);
+  popularSelectsEstaticos();
+  renderChips(campo, containerId);
+  if (campo === "disciplinas") renderGraficos(aplicarFiltrosGlobais(state.pendencias));
+  input.value = "";
+  toast(`"${valor}" adicionado.`);
+}
+
+function removerItemCatalogo(campo, valor, containerId) {
+  const emUso = state.pendencias.some((p) => {
+    if (campo === "ambientes") return p.Ambiente === valor;
+    if (campo === "disciplinas") return p.Disciplina === valor;
+    if (campo === "responsaveis") return p.Responsavel === valor;
+    return false;
+  });
+  const aviso = emUso
+    ? `"${valor}" está em uso em pendências cadastradas. As pendências existentes não serão alteradas, mas o item deixará de aparecer para novos cadastros. Remover mesmo assim?`
+    : `Remover "${valor}" da lista?`;
+  if (!confirm(aviso)) return;
+
+  state[campo] = state[campo].filter((v) => v !== valor);
+  salvarConfigFirestore().catch(erroFirestore);
+  popularSelectsEstaticos();
+  renderChips(campo, containerId);
+  if (campo === "disciplinas") renderGraficos(aplicarFiltrosGlobais(state.pendencias));
+  toast(`"${valor}" removido.`);
+}
+
+/* -------------------------------------------------------------- backup */
+function baixarBackup() {
+  const payload = {
+    versao: 1,
+    dataExportacao: new Date().toISOString(),
+    config: state.config,
+    unidades: state.unidades,
+    ambientes: state.ambientes,
+    disciplinas: state.disciplinas,
+    responsaveis: state.responsaveis,
+    pendencias: state.pendencias,
+  };
+  const nomeArquivo = `backup_${slug(state.config.nomeObra)}_${new Date().toISOString().slice(0, 10)}.json`;
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nomeArquivo;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast("Backup baixado.");
+}
+
+async function restaurarBackupArquivo(ev) {
+  const input = ev.target;
+  const arquivo = input.files[0];
+  if (!arquivo) return;
+
+  const reader = new FileReader();
+  reader.onload = async () => {
+    let dados;
+    try { dados = JSON.parse(String(reader.result)); }
+    catch (e) { toast("Arquivo de backup inválido."); input.value = ""; return; }
+
+    if (!Array.isArray(dados.pendencias) || !Array.isArray(dados.unidades)) {
+      toast("Este arquivo não parece ser um backup válido deste painel.");
+      input.value = "";
+      return;
+    }
+    if (!confirm("Isso vai substituir TODOS os dados atuais (pendências, unidades, catálogos e nome da obra) pelo conteúdo do backup, PARA TODOS OS USUÁRIOS conectados a este painel. Deseja continuar?")) {
+      input.value = "";
+      return;
+    }
+
+    try {
+      const snap = await db.collection("pendencias").get();
+      const batchDelete = db.batch();
+      snap.docs.forEach((d) => batchDelete.delete(d.ref));
+      await batchDelete.commit();
+
+      const batchSeed = db.batch();
+      dados.pendencias.forEach((p) => batchSeed.set(db.collection("pendencias").doc(p.Codigo), p));
+      batchSeed.set(db.collection("config").doc("unidades"), { lista: dados.unidades });
+      batchSeed.set(db.collection("config").doc("geral"), {
+        nomeObra: (dados.config && dados.config.nomeObra) || CONFIG_PADRAO.nomeObra,
+        subtitulo: (dados.config && dados.config.subtitulo) || CONFIG_PADRAO.subtitulo,
+        ambientes: (dados.ambientes && dados.ambientes.length) ? dados.ambientes : [...AMBIENTES],
+        disciplinas: (dados.disciplinas && dados.disciplinas.length) ? dados.disciplinas : [...DISCIPLINAS],
+        responsaveis: (dados.responsaveis && dados.responsaveis.length) ? dados.responsaveis : [...RESPONSAVEIS],
+      });
+      await batchSeed.commit();
+
+      state.filtrosColuna = {};
+      state.selecionadas.clear();
+      input.value = "";
+      toast("Backup restaurado com sucesso.");
+    } catch (e) {
+      erroFirestore(e);
+    }
+  };
+  reader.onerror = () => { toast("Não foi possível ler o arquivo."); input.value = ""; };
+  reader.readAsText(arquivo, "UTF-8");
+}
+
+function renderConfigObraForm() {
+  document.getElementById("cfg-nome-obra").value = state.config.nomeObra;
+  document.getElementById("cfg-subtitulo").value = state.config.subtitulo;
+}
+
+/* ------------------------------------------------------------------ render geral */
+function renderTudo() {
+  recalcularAlertas();
+  document.getElementById("meta-data-hoje").textContent = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  const filtradasGlobal = aplicarFiltrosGlobais(state.pendencias);
+  renderCards(filtradasGlobal);
+  renderHeatmap(filtradasGlobal);
+  renderRanking(filtradasGlobal);
+  renderGraficos(filtradasGlobal);
+
+  const filtradasTabela = aplicarFiltrosTabela(state.pendencias);
+  renderTabela(filtradasTabela);
+  atualizarIconesFiltroColuna();
+
+  renderTabelaUnidades();
+}
+
+/* -------------------------------------------------------------------- modal */
+function proximoCodigo() {
+  const numeros = state.pendencias.map((p) => (p.Codigo.startsWith("P-") ? parseInt(p.Codigo.split("-")[1], 10) : 0)).filter((n) => !isNaN(n));
+  const maiorExistente = numeros.length ? Math.max(...numeros) : 0;
+  const proximo = Math.max(maiorExistente, ultimoCodigoGerado) + 1;
+  ultimoCodigoGerado = proximo;
+  return `P-${String(proximo).padStart(3, "0")}`;
+}
+
+function atualizarPreviewFoto(qual, dataUrl) {
+  const wrap = document.getElementById(`preview-${qual}-wrap`);
+  const img = document.getElementById(`preview-${qual}`);
+  const hidden = document.getElementById(`f-foto-${qual}`);
+  if (dataUrl) {
+    img.src = dataUrl;
+    hidden.value = dataUrl;
+    wrap.hidden = false;
+  } else {
+    img.src = "";
+    hidden.value = "";
+    wrap.hidden = true;
+  }
+}
+
+function comprimirImagem(file, maxDimensao, qualidade) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) { reject(new Error("Arquivo não é uma imagem.")); return; }
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDimensao || height > maxDimensao) {
+          if (width >= height) { height = Math.round(height * (maxDimensao / width)); width = maxDimensao; }
+          else { width = Math.round(width * (maxDimensao / height)); height = maxDimensao; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", qualidade));
+      };
+      img.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+      img.src = leitor.result;
+    };
+    leitor.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
+    leitor.readAsDataURL(file);
+  });
+}
+
+function handleUploadFoto(qual, inputEl) {
+  const arquivo = inputEl.files[0];
+  if (!arquivo) return;
+  comprimirImagem(arquivo, 640, 0.72)
+    .then((dataUrl) => atualizarPreviewFoto(qual, dataUrl))
+    .catch(() => { toast("Não foi possível carregar essa imagem."); inputEl.value = ""; });
+}
+
+function abrirModal(codigo, dadosPredefinidos) {
+  const form = document.getElementById("form-pendencia");
+  form.reset();
+  document.getElementById("form-erro").hidden = true;
+  state.editandoCodigo = codigo || null;
+  const excluirBtn = document.getElementById("btn-excluir-pendencia");
+  atualizarPreviewFoto("antes", "");
+  atualizarPreviewFoto("depois", "");
+
+  const p = codigo ? state.pendencias.find((x) => x.Codigo === codigo) : dadosPredefinidos;
+
+  if (codigo) {
+    document.getElementById("modal-titulo").textContent = `Editar pendência ${codigo}`;
+    document.getElementById("f-codigo").value = codigo;
+    document.getElementById("f-codigo-display").value = codigo;
+    excluirBtn.hidden = false;
+  } else {
+    document.getElementById("modal-titulo").textContent = dadosPredefinidos ? "Duplicar pendência" : "Nova pendência";
+    document.getElementById("f-codigo").value = "";
+    document.getElementById("f-codigo-display").value = `${proximoCodigo()} (gerado automaticamente)`;
+    excluirBtn.hidden = true;
+  }
+
+  if (p) {
+    document.getElementById("f-unidade").value = p.Unidade;
+    document.getElementById("f-ranking").value = p.Ranking;
+    document.getElementById("f-ambiente").value = p.Ambiente;
+    document.getElementById("f-disciplina").value = p.Disciplina;
+    document.getElementById("f-descricao").value = p.Descricao;
+    document.getElementById("f-data-abertura").value = p.Data_Abertura;
+    document.getElementById("f-data-conferencia").value = p.Data_Conferencia || "";
+    document.getElementById("f-responsavel").value = p.Responsavel;
+    document.getElementById("f-criticidade").value = p.Criticidade;
+    document.getElementById("f-status").value = p.Status;
+    document.getElementById("f-observacoes").value = p.Observacoes || "";
+    if (p.Foto_Antes) atualizarPreviewFoto("antes", p.Foto_Antes);
+    if (p.Foto_Depois) atualizarPreviewFoto("depois", p.Foto_Depois);
+  } else {
+    document.getElementById("f-data-abertura").value = new Date().toISOString().slice(0, 10);
+    document.getElementById("f-status").value = "Aberta";
+    document.getElementById("f-criticidade").value = "Baixa";
+    atualizarRankingAutomatico();
+  }
+
+  document.getElementById("modal-overlay").hidden = false;
+}
+
+function fecharModal() { document.getElementById("modal-overlay").hidden = true; state.editandoCodigo = null; }
+function atualizarRankingAutomatico() {
+  const unidade = document.getElementById("f-unidade").value;
+  document.getElementById("f-ranking").value = unidadeInfo(unidade).ranking || "";
+}
+
+function validarPendencia(p) {
+  const obrigatorios = { Unidade: "Unidade", Ambiente: "Ambiente", Disciplina: "Disciplina", Descricao: "Descrição", Data_Abertura: "Data de abertura", Responsavel: "Responsável" };
+  const faltando = Object.entries(obrigatorios).filter(([campo]) => !String(p[campo] || "").trim()).map(([, label]) => label);
+  if (faltando.length) return `Campos obrigatórios ausentes: ${faltando.join(", ")}.`;
+  if (!CRITICIDADES.includes(p.Criticidade)) return `Criticidade inválida: '${p.Criticidade}'.`;
+  if (!STATUS_LIST.includes(p.Status)) return `Status inválido: '${p.Status}'.`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.Data_Abertura)) return "Data de abertura inválida. Utilize o formato AAAA-MM-DD.";
+  return null;
+}
+
+// Validação mais enxuta usada pelo chat: não exige Criticidade nem Responsável,
+// já que esses campos ficam para o engenheiro completar depois na aba Pendências.
+function validarPendenciaChat(p) {
+  const obrigatorios = { Unidade: "Unidade", Ambiente: "Ambiente", Disciplina: "Disciplina", Descricao: "Descrição", Data_Abertura: "Data de abertura" };
+  const faltando = Object.entries(obrigatorios).filter(([campo]) => !String(p[campo] || "").trim()).map(([, label]) => label);
+  if (faltando.length) return `Campos obrigatórios ausentes: ${faltando.join(", ")}.`;
+  if (!STATUS_LIST.includes(p.Status)) return `Status inválido: '${p.Status}'.`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.Data_Abertura)) return "Data de abertura inválida. Utilize o formato AAAA-MM-DD.";
+  return null;
+}
+
+function salvarPendencia(ev) {
+  ev.preventDefault();
+  const erroEl = document.getElementById("form-erro");
+  erroEl.hidden = true;
+
+  const codigoExistente = document.getElementById("f-codigo").value;
+  const unidade = document.getElementById("f-unidade").value;
+  const payload = {
+    Codigo: codigoExistente || proximoCodigo(),
+    Unidade: unidade,
+    Ranking: document.getElementById("f-ranking").value || unidadeInfo(unidade).ranking,
+    Ambiente: document.getElementById("f-ambiente").value,
+    Disciplina: document.getElementById("f-disciplina").value,
+    Descricao: document.getElementById("f-descricao").value.trim(),
+    Data_Abertura: document.getElementById("f-data-abertura").value,
+    Data_Conferencia: document.getElementById("f-data-conferencia").value,
+    Responsavel: document.getElementById("f-responsavel").value,
+    Criticidade: document.getElementById("f-criticidade").value,
+    Status: document.getElementById("f-status").value,
+    Foto_Antes: document.getElementById("f-foto-antes").value.trim(),
+    Foto_Depois: document.getElementById("f-foto-depois").value.trim(),
+    Observacoes: document.getElementById("f-observacoes").value.trim(),
+  };
+
+  const erro = validarPendencia(payload);
+  if (erro) { erroEl.textContent = erro; erroEl.hidden = false; return; }
+
+  db.collection("pendencias").doc(payload.Codigo).set(payload).catch((e) => {
+    console.error(e);
+    alert("Não foi possível salvar no banco de dados: " + e.message);
+  });
+
+  fecharModal();
+  toast(codigoExistente ? "Pendência atualizada." : "Pendência cadastrada.");
+}
+
+function excluirPendencia(codigo) {
+  if (!confirm(`Excluir a pendência ${codigo}? Esta ação não pode ser desfeita.`)) return;
+  db.collection("pendencias").doc(codigo).delete().catch(erroFirestore);
+  toast("Pendência excluída.");
+}
+
+/* ------------------------------------------------------------------ eventos */
+function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; }
+
+function bindEvents() {
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("is-active"));
+      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("is-active"));
+      btn.classList.add("is-active");
+      document.getElementById(`tab-${btn.dataset.tab}`).classList.add("is-active");
+    });
+  });
+
+  ["fg-unidade", "fg-status", "fg-criticidade"].forEach((id) => document.getElementById(id).addEventListener("change", renderTudo));
+  document.getElementById("fg-limpar").addEventListener("click", () => {
+    ["fg-unidade", "fg-status", "fg-criticidade"].forEach((id) => (document.getElementById(id).value = ""));
+    renderTudo();
+  });
+
+  document.getElementById("busca-livre").addEventListener("input", debounce(renderTudo, 200));
+  document.getElementById("ft-limpar").addEventListener("click", limparTodosFiltros);
+  document.getElementById("btn-baixar-pdf").addEventListener("click", baixarPDFPendencias);
+
+  Object.entries(SELECT_FILTRO_POR_CAMPO).forEach(([campo, selectId]) => {
+    document.getElementById(selectId).addEventListener("change", (e) => aplicarFiltroDropdown(campo, e.target.value));
+  });
+
+  document.querySelectorAll(".th-filter-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (filtroColunaAtual === btn.dataset.campo) { fecharFiltroColuna(); return; }
+      abrirFiltroColuna(btn.dataset.campo, btn);
+    });
+  });
+  document.getElementById("col-filter-marcar-tudo").addEventListener("click", () => {
+    filtroColunaSelecaoTemp = new Set(valoresUnicosPara(filtroColunaAtual));
+    renderListaFiltroColuna(valoresUnicosPara(filtroColunaAtual));
+  });
+  document.getElementById("col-filter-desmarcar-tudo").addEventListener("click", () => {
+    filtroColunaSelecaoTemp = new Set();
+    renderListaFiltroColuna(valoresUnicosPara(filtroColunaAtual));
+  });
+  document.getElementById("col-filter-cancelar").addEventListener("click", fecharFiltroColuna);
+  document.getElementById("col-filter-ok").addEventListener("click", aplicarFiltroColuna);
+  document.addEventListener("click", (e) => {
+    const painel = document.getElementById("col-filter-panel");
+    if (!painel.hidden && !painel.contains(e.target) && !e.target.closest(".th-filter-btn")) fecharFiltroColuna();
+  });
+
+  document.getElementById("btn-nova-pendencia").addEventListener("click", () => abrirModal(null));
+  document.getElementById("modal-fechar").addEventListener("click", fecharModal);
+  document.getElementById("btn-cancelar").addEventListener("click", fecharModal);
+  document.getElementById("modal-overlay").addEventListener("click", (e) => { if (e.target.id === "modal-overlay") fecharModal(); });
+  document.getElementById("form-pendencia").addEventListener("submit", salvarPendencia);
+  document.getElementById("f-unidade").addEventListener("change", atualizarRankingAutomatico);
+  document.getElementById("btn-excluir-pendencia").addEventListener("click", () => {
+    const codigo = document.getElementById("f-codigo").value;
+    fecharModal();
+    excluirPendencia(codigo);
+  });
+
+  document.getElementById("f-foto-antes-arquivo").addEventListener("change", (e) => handleUploadFoto("antes", e.target));
+  document.getElementById("f-foto-depois-arquivo").addEventListener("change", (e) => handleUploadFoto("depois", e.target));
+  document.querySelectorAll("[data-remover-foto]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const qual = btn.dataset.removerFoto;
+      atualizarPreviewFoto(qual, "");
+      document.getElementById(`f-foto-${qual}-arquivo`).value = "";
+    });
+  });
+
+  document.getElementById("chk-selecionar-tudo").addEventListener("change", (e) => alternarSelecaoTudo(e.target.checked));
+  document.getElementById("bulk-aplicar-status").addEventListener("click", aplicarStatusEmMassa);
+  document.getElementById("bulk-excluir").addEventListener("click", excluirEmMassa);
+  document.getElementById("bulk-limpar-selecao").addEventListener("click", limparSelecao);
+
+  document.getElementById("lightbox-fechar").addEventListener("click", fecharLightbox);
+  document.getElementById("lightbox-overlay").addEventListener("click", (e) => { if (e.target.id === "lightbox-overlay") fecharLightbox(); });
+
+  document.getElementById("chat-fab").addEventListener("click", abrirChat);
+  document.getElementById("chat-fechar").addEventListener("click", fecharChat);
+
+
+  document.getElementById("busca-unidades").addEventListener("input", debounce(renderTabelaUnidades, 200));
+  document.getElementById("btn-restaurar-ranking").addEventListener("click", restaurarRankingPadrao);
+  document.getElementById("btn-add-unidade").addEventListener("click", adicionarUnidade);
+
+  document.getElementById("btn-salvar-config").addEventListener("click", salvarConfigObra);
+
+  document.getElementById("btn-add-ambiente").addEventListener("click", () => adicionarItemCatalogo("ambientes", "novo-ambiente", "chips-ambientes"));
+  document.getElementById("btn-add-disciplina").addEventListener("click", () => adicionarItemCatalogo("disciplinas", "novo-disciplina", "chips-disciplinas"));
+  document.getElementById("btn-add-responsavel").addEventListener("click", () => adicionarItemCatalogo("responsaveis", "novo-responsavel", "chips-responsaveis"));
+  [["novo-ambiente", "ambientes", "chips-ambientes"], ["novo-disciplina", "disciplinas", "chips-disciplinas"], ["novo-responsavel", "responsaveis", "chips-responsaveis"]].forEach(([inputId, campo, containerId]) => {
+    document.getElementById(inputId).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); adicionarItemCatalogo(campo, inputId, containerId); } });
+  });
+
+  document.getElementById("btn-baixar-backup").addEventListener("click", baixarBackup);
+  document.getElementById("input-restaurar-backup").addEventListener("change", restaurarBackupArquivo);
+}
+
+/* ------------------------------------------------------------------- boot */
+/* =========================================================================
+   Tela de senha
+   Aviso importante: isto protege apenas a INTERFACE (esconde a tela até a
+   senha certa ser digitada). Não é segurança de verdade — qualquer pessoa
+   que veja o código-fonte da página encontra a senha, e se o banco de dados
+   (Firestore) estiver com regras abertas, dá pra ler/escrever nos dados
+   direto pela API, sem passar por essa tela. Veja as regras de segurança
+   do Firestore sugeridas na documentação do projeto para fechar essa
+   brecha de verdade.
+   ========================================================================= */
+const SENHA_ACESSO = "amira";
+const LOCK_SESSION_KEY = "painel_terminalidade_desbloqueado";
+
+function verificarSenhaSalva() {
+  if (sessionStorage.getItem(LOCK_SESSION_KEY) === "1") {
+    document.getElementById("lock-overlay").hidden = true;
+  }
+}
+
+function bindLockScreen() {
+  document.getElementById("lock-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const campo = document.getElementById("lock-senha");
+    const erro = document.getElementById("lock-erro");
+    if (campo.value === SENHA_ACESSO) {
+      sessionStorage.setItem(LOCK_SESSION_KEY, "1");
+      document.getElementById("lock-overlay").hidden = true;
+      erro.hidden = true;
+    } else {
+      erro.hidden = false;
+      campo.value = "";
+      campo.focus();
+    }
+  });
+}
+
+(function init() {
+  verificarSenhaSalva();
+  bindLockScreen();
+  bindEvents();
+  carregarDados(); // inicia o Firebase; a primeira renderização acontece quando os dados chegam dos listeners em tempo real
+})();
+</script>
+</body>
+</html>
