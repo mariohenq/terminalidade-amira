@@ -1158,6 +1158,8 @@ select, input, textarea { font-family: inherit; font-size: 14px; }
       <input type="search" id="busca-livre" placeholder="Buscar por código, unidade, descrição, responsável…">
       <button class="btn btn--ghost" id="ft-limpar">Limpar filtros</button>
       <button class="btn btn--ghost" id="btn-baixar-pdf">⬇ Baixar PDF</button>
+      <label class="btn btn--ghost" for="input-importar-docx" style="cursor:pointer;" title="Importa pendências a partir de um relatório .docx com tabelas de Pendência/Antes/Depois">⬆ Importar relatório (.docx)</label>
+      <input type="file" id="input-importar-docx" accept=".docx" hidden>
       <button class="btn btn--primary" id="btn-nova-pendencia">+ Nova pendência</button>
       <span class="filterbar__count" id="contagem-resultados"></span>
     </div>
@@ -1481,6 +1483,7 @@ select, input, textarea { font-family: inherit; font-size: 14px; }
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 /* =========================================================================
    Painel de Terminalidade — front-end + Firestore (banco compartilhado)
@@ -1686,28 +1689,34 @@ function inicializarFirebase() {
 }
 
 async function seedFirestoreSeNecessario() {
-  const [snapPend, docUnidades, docGeral] = await Promise.all([
-    db.collection("pendencias").limit(1).get(),
-    db.collection("config").doc("unidades").get(),
-    db.collection("config").doc("geral").get(),
-  ]);
+  // Usa a existência do documento config/geral como marca permanente de
+  // "este banco já foi inicializado alguma vez". Isso é intencional e
+  // importante: a coleção de pendências pode legitimamente chegar a zero
+  // (ex.: o usuário limpa os dados de demonstração antes de importar dados
+  // reais) sem que isso deva disparar uma nova rodada de seed automático.
+  const docGeral = await db.collection("config").doc("geral").get();
 
-  if (!snapPend.empty && docUnidades.exists && docGeral.exists) return;
+  if (docGeral.exists) {
+    // já inicializado antes — nunca repopula pendências automaticamente,
+    // mesmo que a coleção esteja vazia agora. Só garante que o documento
+    // de unidades exista (caso raro de inicialização incompleta anterior).
+    const docUnidades = await db.collection("config").doc("unidades").get();
+    if (!docUnidades.exists) {
+      const gerados = gerarDadosOriginais();
+      await db.collection("config").doc("unidades").set({ lista: gerados.unidades });
+    }
+    return;
+  }
 
+  // Primeira inicialização de verdade (config/geral nunca existiu neste banco).
   const gerados = gerarDadosOriginais();
   const batch = db.batch();
-  if (snapPend.empty) {
-    gerados.pendencias.forEach((p) => batch.set(db.collection("pendencias").doc(p.Codigo), p));
-  }
-  if (!docUnidades.exists) {
-    batch.set(db.collection("config").doc("unidades"), { lista: gerados.unidades });
-  }
-  if (!docGeral.exists) {
-    batch.set(db.collection("config").doc("geral"), {
-      nomeObra: CONFIG_PADRAO.nomeObra, subtitulo: CONFIG_PADRAO.subtitulo,
-      ambientes: AMBIENTES, disciplinas: DISCIPLINAS, responsaveis: RESPONSAVEIS,
+  gerados.pendencias.forEach((p) => batch.set(db.collection("pendencias").doc(p.Codigo), p));
+  batch.set(db.collection("config").doc("unidades"), { lista: gerados.unidades });
+  batch.set(db.collection("config").doc("geral"), {
+    nomeObra: CONFIG_PADRAO.nomeObra, subtitulo: CONFIG_PADRAO.subtitulo,
+    ambientes: AMBIENTES, disciplinas: DISCIPLINAS, responsaveis: RESPONSAVEIS,
     });
-  }
   await batch.commit();
 }
 
@@ -1843,8 +1852,8 @@ function popularSelectsEstaticos() {
   fillSelect(document.getElementById("fg-criticidade"), CRITICIDADES, true, "Criticidade — todas");
   fillSelect(document.getElementById("bulk-status"), STATUS_LIST, true, "Alterar status para…");
 
-  fillSelect(document.getElementById("f-ambiente"), state.ambientes, false);
-  fillSelect(document.getElementById("f-disciplina"), state.disciplinas, false);
+  fillSelect(document.getElementById("f-ambiente"), state.ambientes, true, "— Selecionar —");
+  fillSelect(document.getElementById("f-disciplina"), state.disciplinas, true, "— Selecionar —");
   fillSelect(document.getElementById("f-responsavel"), state.responsaveis, true, "— Selecionar —");
   fillSelect(document.getElementById("f-status"), STATUS_LIST, false);
 
@@ -2192,12 +2201,20 @@ function badgeResponsavel(r) {
   if (!r) return `<span class="badge badge--pendente" title="Engenheiro precisa definir">Definir responsável</span>`;
   return r;
 }
+function badgeAmbiente(a) {
+  if (!a) return `<span class="badge badge--pendente" title="Engenheiro precisa definir">Definir ambiente</span>`;
+  return a;
+}
+function badgeDisciplina(d) {
+  if (!d) return `<span class="badge badge--pendente" title="Engenheiro precisa definir">Definir disciplina</span>`;
+  return d;
+}
 function badgeAlerta(a) {
   const map = { "Dentro do fluxo normal": "normal", "Atenção": "atencao", "Pendência antiga": "antiga", "Encerrada": "encerrada" };
   return `<span class="badge badge--alerta-${map[a] || "normal"}">${a}</span>`;
 }
 function formatarData(iso) { if (!iso) return "—"; const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; }
-function pendenciaIncompleta(p) { return !p.Criticidade || !p.Responsavel; }
+function pendenciaIncompleta(p) { return !p.Criticidade || !p.Responsavel || !p.Ambiente || !p.Disciplina; }
 
 function selectStatusInline(codigo, statusAtual) {
   const opcoes = STATUS_LIST.map((s) => `<option value="${s}" ${s === statusAtual ? "selected" : ""}>${s}</option>`).join("");
@@ -2221,8 +2238,8 @@ function renderTabela(lista) {
       <td class="cod">${p.Codigo}</td>
       <td>${p.Unidade}</td>
       <td>${p.Ranking || "—"}</td>
-      <td>${p.Ambiente}</td>
-      <td>${p.Disciplina}</td>
+      <td>${badgeAmbiente(p.Ambiente)}</td>
+      <td>${badgeDisciplina(p.Disciplina)}</td>
       <td class="desc-col">${p.Descricao}</td>
       <td class="fotos-col">${colunaFotos(p)}</td>
       <td>${formatarData(p.Data_Abertura)}</td>
@@ -2265,7 +2282,7 @@ function renderCardsPendenciasMobile(ordenada) {
         </div>
         ${badgeAlerta(p.Alerta)}
       </div>
-      <div class="pend-card__meta">Unidade ${p.Unidade} (Rk. ${p.Ranking || "—"}) · ${p.Ambiente} · ${p.Disciplina}</div>
+      <div class="pend-card__meta">Unidade ${p.Unidade} (Rk. ${p.Ranking || "—"}) · ${badgeAmbiente(p.Ambiente)} · ${badgeDisciplina(p.Disciplina)}</div>
       <div class="pend-card__desc">${p.Descricao}</div>
       <div class="pend-card__fotos">${colunaFotos(p)}</div>
       <div class="pend-card__grid">
@@ -2344,7 +2361,10 @@ function excluirEmMassa() {
   const codigos = [...state.selecionadas];
   const batch = db.batch();
   codigos.forEach((codigo) => batch.delete(db.collection("pendencias").doc(codigo)));
-  batch.commit().catch(erroFirestore);
+  batch.commit().catch((e) => {
+    console.error("Falha ao excluir em massa:", e);
+    alert(`Não foi possível excluir as pendências selecionadas.\n\nDetalhe técnico: ${e.message}\n\nIsso costuma acontecer por falta de permissão no banco de dados. Verifique as regras do Firestore.`);
+  });
   const qtd = state.selecionadas.size;
   state.selecionadas.clear();
   toast(`${qtd} pendência(s) excluída(s).`);
@@ -2560,6 +2580,233 @@ function baixarPDFPendencias() {
   } catch (erro) {
     console.error("Falha ao gerar PDF:", erro);
     alert(`Não foi possível gerar o PDF.\n\nDetalhe técnico: ${erro && erro.message ? erro.message : "erro desconhecido"}\n\nSe puder, copie essa mensagem e envie para quem está desenvolvendo o painel.`);
+  }
+}
+
+/* =========================================================================
+   Importação de relatório .docx (tabelas de Pendência / Antes / Depois)
+   Lê o .docx inteiramente no navegador (com JSZip), sem enviar o arquivo
+   a nenhum servidor. Sempre que houver dúvida sobre ambiente, disciplina,
+   criticidade ou responsável, o campo fica em branco e marcado como
+   "Definir" — igual ao que já acontece com o cadastro assistido pelo chat.
+   ========================================================================= */
+const NS_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+const ALIASES_AMBIENTE = {
+  "i.s. serv": "BWC Serviço", "is serv": "BWC Serviço", "i.s.serv": "BWC Serviço",
+  "i.s. suite master": "BWC Suíte Master", "i.s. suíte master": "BWC Suíte Master",
+  "i.s. master": "BWC Suíte Master", "is master": "BWC Suíte Master",
+  "i.s. 3": "BWC 3", "is 3": "BWC 3",
+  "i.s. 2": "BWC 2", "is 2": "BWC 2",
+  "suite master": "Suíte Master", "suíte master": "Suíte Master", "master": "Suíte Master",
+  "suite 3": "Quarto 3", "suíte 3": "Quarto 3", "quarto 3": "Quarto 3",
+  "suite 2": "Quarto 2", "suíte 2": "Quarto 2", "quarto 2": "Quarto 2",
+  "living": "Sala de Estar", "sala de estar": "Sala de Estar",
+  "area tecnica": "Área Técnica", "área técnica": "Área Técnica",
+  "lavanderia": "Lavanderia",
+  "cozinha": "Cozinha",
+  "gourmet": "Gourmet",
+  "deposito": "Depósito", "depósito": "Depósito",
+};
+
+function removerAcentos(s) {
+  return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function detectarAmbiente(textoPendencia) {
+  const m = String(textoPendencia || "").match(/^(.+?)\s*[-–—]\s*/);
+  const candidato = (m ? m[1] : "").trim();
+  if (!candidato) return "";
+  const chave = removerAcentos(candidato.toLowerCase());
+
+  for (const aliasChave in ALIASES_AMBIENTE) {
+    const aliasNorm = removerAcentos(aliasChave);
+    if (chave === aliasNorm || chave.indexOf(aliasNorm) === 0) {
+      const nomeCatalogo = ALIASES_AMBIENTE[aliasChave];
+      if (state.ambientes.includes(nomeCatalogo)) return nomeCatalogo;
+    }
+  }
+  const encontrado = state.ambientes.find((a) => removerAcentos(a.toLowerCase()) === chave);
+  return encontrado || "";
+}
+
+function detectarUnidadeNoTexto(textoCompleto) {
+  const m = String(textoCompleto || "").match(/(?:Apartamento|Unidade|Ap\.?)\s*[:\-]?\s*(\d{2,5})/i);
+  return m ? m[1] : null;
+}
+
+function textoDeElementoXml(el) {
+  const ts = el.getElementsByTagNameNS(NS_W, "t");
+  let texto = "";
+  for (let i = 0; i < ts.length; i++) texto += ts[i].textContent;
+  return texto;
+}
+
+function extrairItensDeTabelasDocx(xmlDoc) {
+  const tabelas = xmlDoc.getElementsByTagNameNS(NS_W, "tbl");
+  const itens = [];
+  for (let i = 0; i < tabelas.length; i++) {
+    const tbl = tabelas[i];
+    const linhas = tbl.getElementsByTagNameNS(NS_W, "tr");
+    if (linhas.length === 0) continue;
+
+    const celulas = linhas[0].getElementsByTagNameNS(NS_W, "tc");
+    const textosCelulas = [];
+    for (let c = 0; c < celulas.length; c++) textosCelulas.push(textoDeElemento_ou_vazio(celulas[c]));
+
+    let textoPendencia = "";
+    for (let c = 2; c < textosCelulas.length; c++) {
+      if (textosCelulas[c]) { textoPendencia = textosCelulas[c]; break; }
+    }
+    if (!textoPendencia) continue;
+
+    const blips = tbl.getElementsByTagNameNS(NS_A, "blip");
+    const rIds = [];
+    for (let b = 0; b < blips.length; b++) {
+      const rId = blips[b].getAttributeNS(NS_R, "embed");
+      if (rId) rIds.push(rId);
+    }
+
+    itens.push({ numero: textosCelulas[0] || String(i + 1), texto: textoPendencia.trim(), rIds });
+  }
+  return itens;
+}
+function textoDeElemento_ou_vazio(el) { return textoDeElementoXml(el).trim(); }
+
+function comprimirImagemDataUrl(dataUrlOriginal, maxDimensao, qualidade) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDimensao || height > maxDimensao) {
+        if (width >= height) { height = Math.round(height * (maxDimensao / width)); width = maxDimensao; }
+        else { width = Math.round(width * (maxDimensao / height)); height = maxDimensao; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", qualidade));
+    };
+    img.onerror = () => reject(new Error("Não foi possível processar uma das imagens do documento."));
+    img.src = dataUrlOriginal;
+  });
+}
+
+async function lerDocumentoDocx(arquivo) {
+  const buffer = await arquivo.arrayBuffer();
+  const zip = await JSZip.loadAsync(buffer);
+
+  const documentXmlFile = zip.file("word/document.xml");
+  if (!documentXmlFile) throw new Error("Não encontrei word/document.xml — este arquivo pode não ser um .docx válido.");
+  const documentXmlText = await documentXmlFile.async("text");
+
+  const relsFile = zip.file("word/_rels/document.xml.rels");
+  const relsXmlText = relsFile ? await relsFile.async("text") : "";
+
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(documentXmlText, "application/xml");
+  const relsDoc = relsXmlText ? parser.parseFromString(relsXmlText, "application/xml") : null;
+
+  const mapaImagens = {};
+  if (relsDoc) {
+    const relacoes = relsDoc.getElementsByTagName("Relationship");
+    for (let i = 0; i < relacoes.length; i++) {
+      const tipo = relacoes[i].getAttribute("Type") || "";
+      if (tipo.indexOf("/image") === -1) continue;
+      mapaImagens[relacoes[i].getAttribute("Id")] = relacoes[i].getAttribute("Target");
+    }
+  }
+
+  const textoCompleto = textoDeElementoXml(xmlDoc);
+  const itens = extrairItensDeTabelasDocx(xmlDoc);
+
+  return { zip, mapaImagens, textoCompleto, itens };
+}
+
+async function importarDocxPendencias(arquivo) {
+  if (typeof JSZip === "undefined") {
+    alert("A biblioteca de leitura de arquivos .docx não carregou. Verifique sua conexão com a internet e tente novamente.");
+    return;
+  }
+
+  let leitura;
+  try {
+    leitura = await lerDocumentoDocx(arquivo);
+  } catch (e) {
+    console.error("Erro ao ler o .docx:", e);
+    alert("Não foi possível ler este arquivo .docx.\n\nDetalhe técnico: " + e.message);
+    return;
+  }
+
+  if (leitura.itens.length === 0) {
+    alert("Não encontrei nenhuma tabela de pendência reconhecível neste documento (esperava tabelas com uma linha \"Pendência:\").");
+    return;
+  }
+
+  let unidade = detectarUnidadeNoTexto(leitura.textoCompleto);
+  if (!unidade) {
+    unidade = prompt("Não consegui identificar automaticamente o número da unidade neste documento. Digite manualmente (ex.: 203):", "");
+    if (!unidade) { toast("Importação cancelada — unidade não informada."); return; }
+    unidade = unidade.trim();
+  }
+
+  const qtdItens = leitura.itens.length;
+  if (!confirm(`Encontrei ${qtdItens} pendência(s) para a unidade ${unidade}. Elas serão adicionadas ao banco compartilhado, visível para todos que acessam este painel. Continuar?`)) return;
+
+  toast(`Importando ${qtdItens} pendência(s), aguarde…`);
+
+  const novasPendencias = [];
+  let semAmbiente = 0;
+
+  for (const item of leitura.itens) {
+    let fotoDataUrl = "";
+    if (item.rIds.length > 0) {
+      const caminhoMedia = leitura.mapaImagens[item.rIds[0]];
+      if (caminhoMedia) {
+        try {
+          const arquivoMedia = leitura.zip.file("word/" + caminhoMedia);
+          if (arquivoMedia) {
+            const base64 = await arquivoMedia.async("base64");
+            const extensao = caminhoMedia.split(".").pop().toLowerCase();
+            const mime = extensao === "png" ? "image/png" : "image/jpeg";
+            fotoDataUrl = await comprimirImagemDataUrl(`data:${mime};base64,${base64}`, 640, 0.72);
+          }
+        } catch (e) { /* segue sem foto se essa imagem especifica falhar */ }
+      }
+    }
+
+    const ambienteDetectado = detectarAmbiente(item.texto);
+    if (!ambienteDetectado) semAmbiente++;
+
+    novasPendencias.push({
+      Codigo: proximoCodigo(),
+      Unidade: unidade,
+      Ranking: unidadeInfo(unidade).ranking || "",
+      Ambiente: ambienteDetectado,
+      Disciplina: "",
+      Descricao: item.texto || "(sem descrição)",
+      Data_Abertura: new Date().toISOString().slice(0, 10),
+      Responsavel: "",
+      Criticidade: "",
+      Status: "Aberta",
+      Data_Conferencia: "",
+      Foto_Antes: fotoDataUrl,
+      Foto_Depois: "",
+      Observacoes: "Importado automaticamente de relatório .docx.",
+    });
+  }
+
+  try {
+    const batch = db.batch();
+    novasPendencias.forEach((p) => batch.set(db.collection("pendencias").doc(p.Codigo), p));
+    await batch.commit();
+    const avisoAmbiente = semAmbiente > 0 ? ` ${semAmbiente} pendência(s) precisam do ambiente definido pelo engenheiro.` : "";
+    toast(`${novasPendencias.length} pendência(s) importada(s) da unidade ${unidade}.${avisoAmbiente}`);
+  } catch (e) {
+    erroFirestore(e);
   }
 }
 
@@ -3311,7 +3558,10 @@ function salvarPendencia(ev) {
 
 function excluirPendencia(codigo) {
   if (!confirm(`Excluir a pendência ${codigo}? Esta ação não pode ser desfeita.`)) return;
-  db.collection("pendencias").doc(codigo).delete().catch(erroFirestore);
+  db.collection("pendencias").doc(codigo).delete().catch((e) => {
+    console.error("Falha ao excluir pendência:", e);
+    alert(`Não foi possível excluir a pendência ${codigo}.\n\nDetalhe técnico: ${e.message}\n\nIsso costuma acontecer por falta de permissão no banco de dados. Verifique as regras do Firestore.`);
+  });
   toast("Pendência excluída.");
 }
 
@@ -3337,6 +3587,11 @@ function bindEvents() {
   document.getElementById("busca-livre").addEventListener("input", debounce(renderTudo, 200));
   document.getElementById("ft-limpar").addEventListener("click", limparTodosFiltros);
   document.getElementById("btn-baixar-pdf").addEventListener("click", baixarPDFPendencias);
+  document.getElementById("input-importar-docx").addEventListener("change", (e) => {
+    const arquivo = e.target.files[0];
+    if (!arquivo) return;
+    importarDocxPendencias(arquivo).finally(() => { e.target.value = ""; });
+  });
 
   Object.entries(SELECT_FILTRO_POR_CAMPO).forEach(([campo, selectId]) => {
     document.getElementById(selectId).addEventListener("change", (e) => aplicarFiltroDropdown(campo, e.target.value));
